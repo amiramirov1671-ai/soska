@@ -10,6 +10,12 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+}
+
 body {
     background: #0B0E17;
     color: #FFFFFF;
@@ -18,19 +24,26 @@ body {
     flex-direction: column;
     gap: 16px;
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 button {
+    font: inherit;
     -webkit-appearance: none;
     appearance: none;
 }
 
+/* =========================
+   HEADER
+========================= */
+
 .header {
+    width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    z-index: 10;
     position: relative;
+    z-index: 10;
 }
 
 .profile {
@@ -42,6 +55,7 @@ button {
 .avatar {
     width: 42px;
     height: 42px;
+    min-width: 42px;
     background: #FF7700;
     border-radius: 50%;
     display: flex;
@@ -64,7 +78,7 @@ button {
     background: #161A26;
     border: 1px solid #252B3B;
     border-radius: 20px;
-    padding: 6px 14px;
+    padding: 6px 10px 6px 14px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -73,14 +87,15 @@ button {
 .balance-val {
     font-size: 18px;
     font-weight: 800;
-    color: #FFF;
+    color: #FFFFFF;
 }
 
 .add-btn {
     background: #FF9900;
-    color: #000;
-    width: 26px;
-    height: 26px;
+    color: #000000;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -88,7 +103,19 @@ button {
     font-weight: 900;
     cursor: pointer;
     border: none;
-    font-size: 16px;
+    font-size: 18px;
+    line-height: 1;
+}
+
+/* =========================
+   MAIN MENU
+========================= */
+
+#main-menu {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
 .banner {
@@ -142,7 +169,7 @@ button {
     padding: 16px;
     text-align: center;
     cursor: pointer;
-    transition: 0.2s;
+    transition: transform 0.15s, border-color 0.15s, background 0.15s;
     user-select: none;
 }
 
@@ -160,7 +187,7 @@ button {
 .stake-amount {
     font-size: 22px;
     font-weight: 800;
-    color: #FFF;
+    color: #FFFFFF;
 }
 
 .win-amount {
@@ -170,21 +197,25 @@ button {
     font-weight: 600;
 }
 
-.btn-pvp {
-    background: linear-gradient(135deg, #FF9900, #FF5500);
-    color: #FFF;
-    border: none;
-    padding: 16px;
+.btn-pvp,
+.btn-bot {
+    width: 100%;
     border-radius: 14px;
-    font-size: 16px;
-    font-weight: 800;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+}
+
+.btn-pvp {
+    background: linear-gradient(135deg, #FF9900, #FF5500);
+    color: #FFFFFF;
+    border: none;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 800;
     box-shadow: 0 4px 15px rgba(255, 85, 0, 0.3);
-    width: 100%;
 }
 
 .btn-bot {
@@ -192,15 +223,8 @@ button {
     color: #8E92A8;
     border: 1px solid #252B3B;
     padding: 14px;
-    border-radius: 14px;
     font-size: 14px;
     font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
 }
 
 .btn-pvp:active,
@@ -210,19 +234,148 @@ button {
     transform: scale(0.98);
 }
 
-/* Модальное окно */
+/* =========================
+   GAME SCREEN
+========================= */
+
+#game-screen {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.game-header {
+    width: 100%;
+    max-width: 330px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.game-title {
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.game-stake {
+    font-size: 13px;
+    color: #FF9900;
+    background: #161A26;
+    border: 1px solid #252B3B;
+    padding: 6px 10px;
+    border-radius: 10px;
+}
+
+#game-status {
+    width: 100%;
+    max-width: 330px;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: #FF9900;
+    min-height: 24px;
+}
+
+/*
+   ИГРОВОЕ ПОЛЕ
+
+   Ровно 9 клеток.
+   Используем фиксированную ширину,
+   чтобы поле не растягивалось.
+*/
+
+.board {
+    width: min(86vw, 320px);
+    height: min(86vw, 320px);
+    max-width: 320px;
+    max-height: 320px;
+
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+
+    gap: 8px;
+
+    margin: 0 auto;
+}
+
+.cell {
+    width: 100%;
+    height: 100%;
+
+    background: #161A26;
+    border: 2px solid #252B3B;
+    border-radius: 12px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #FFFFFF;
+
+    font-size: clamp(32px, 11vw, 48px);
+    font-weight: 800;
+    line-height: 1;
+
+    cursor: pointer;
+    user-select: none;
+
+    padding: 0;
+
+    position: relative;
+    z-index: 2;
+
+    transition:
+        background 0.15s,
+        border-color 0.15s,
+        transform 0.1s;
+}
+
+.cell:empty {
+    cursor: pointer;
+}
+
+.cell:hover {
+    border-color: #3A4258;
+}
+
+.cell:active {
+    transform: scale(0.96);
+    background: #1F2436;
+}
+
+.cell.x {
+    color: #FF9900;
+}
+
+.cell.o {
+    color: #00FF88;
+}
+
+.game-exit {
+    width: 100%;
+    max-width: 330px;
+    margin-top: 4px;
+}
+
+/* =========================
+   MODAL
+========================= */
 
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
+
     background: rgba(0, 0, 0, 0.85);
+
     display: none;
     align-items: center;
     justify-content: center;
+
     padding: 20px;
+
     z-index: 99999;
 }
 
@@ -230,9 +383,12 @@ button {
     background: #161A26;
     border: 1px solid #252B3B;
     border-radius: 20px;
+
     padding: 20px;
+
     width: 100%;
     max-width: 360px;
+
     text-align: center;
 }
 
@@ -240,6 +396,7 @@ button {
     display: flex;
     justify-content: space-between;
     align-items: center;
+
     margin-bottom: 12px;
 }
 
@@ -251,22 +408,34 @@ button {
 .close-btn {
     background: none;
     border: none;
+
     color: #8E92A8;
+
     font-size: 20px;
+
     cursor: pointer;
 }
 
 .stars-pack {
     background: #1F2436;
+
     border: 1px solid #252B3B;
     border-radius: 12px;
+
     padding: 14px;
+
     margin-top: 10px;
+
     display: flex;
     justify-content: space-between;
     align-items: center;
+
     cursor: pointer;
     user-select: none;
+
+    transition:
+        border-color 0.15s,
+        transform 0.1s;
 }
 
 .stars-pack:active {
@@ -274,54 +443,45 @@ button {
     transform: scale(0.98);
 }
 
-/* Игровое поле */
+/* =========================
+   MOBILE
+========================= */
 
-#game-screen {
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    width: 100%;
-}
+@media (max-width: 380px) {
 
-.board {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    width: 100%;
-    max-width: 320px;
-}
+    body {
+        padding: 12px;
+    }
 
-.cell {
-    background: #161A26;
-    border: 2px solid #252B3B;
-    border-radius: 12px;
-    aspect-ratio: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    font-weight: bold;
-    cursor: pointer;
-    color: #FFF;
-    user-select: none;
-}
+    .banner {
+        padding: 16px;
+    }
 
-.cell:active {
-    background: #1F2436;
-}
+    .banner h2 {
+        font-size: 18px;
+    }
 
-.status {
-    font-size: 18px;
-    color: #FF9900;
-    margin-top: 10px;
-    text-align: center;
-}
+    .stake-card {
+        padding: 13px;
+    }
 
-.hidden {
-    display: none !important;
+    .stake-amount {
+        font-size: 20px;
+    }
+
+    .board {
+        width: min(84vw, 290px);
+        height: min(84vw, 290px);
+        gap: 7px;
+    }
+
+    .cell {
+        border-radius: 10px;
+    }
 }
-</style></head><body><!-- ШАПКА --><div class="header"><div class="profile">
+</style></head><body><!-- =========================
+     HEADER
+========================= --><div class="header"><div class="profile">
 
     <div class="avatar" id="user-avatar">
         👤
@@ -339,7 +499,10 @@ button {
 
     <span style="color:#FF9900;">⭐</span>
 
-    <span class="balance-val" id="stars-count">
+    <span
+        class="balance-val"
+        id="stars-count"
+    >
         0
     </span>
 
@@ -353,10 +516,9 @@ button {
 
 </div>
 
-</div><!-- ГЛАВНОЕ МЕНЮ --><div
-    id="main-menu"
-    style="display:flex; flex-direction:column; gap:14px;"
-><div class="banner">
+</div><!-- =========================
+     MAIN MENU
+========================= --><div id="main-menu"><div class="banner">
 
     <div class="badge">
         ⚡ Комиссия стола: 10%
@@ -471,12 +633,27 @@ button {
     🤖 Тренировка с Ботом (Без риска)
 </button>
 
-</div><!-- ИГРА --><div id="game-screen"><h3
-    id="game-status"
-    class="status"
->
+</div><!-- =========================
+     GAME
+========================= --><div id="game-screen"><div class="game-header">
+
+    <div class="game-title">
+        🎮 Игра
+    </div>
+
+    <div
+        class="game-stake"
+        id="game-stake"
+    >
+        Без ставки
+    </div>
+
+</div>
+
+
+<div id="game-status">
     Ваш ход (❌)
-</h3>
+</div>
 
 
 <div
@@ -484,30 +661,87 @@ button {
     id="board"
 >
 
-    <div class="cell" onclick="makeMove(0)"></div>
-    <div class="cell" onclick="makeMove(1)"></div>
-    <div class="cell" onclick="makeMove(2)"></div>
+    <button
+        type="button"
+        class="cell"
+        data-index="0"
+        aria-label="Клетка 1"
+    ></button>
 
-    <div class="cell" onclick="makeMove(3)"></div>
-    <div class="cell" onclick="makeMove(4)"></div>
-    <div class="cell" onclick="makeMove(5)"></div>
+    <button
+        type="button"
+        class="cell"
+        data-index="1"
+        aria-label="Клетка 2"
+    ></button>
 
-    <div class="cell" onclick="makeMove(6)"></div>
-    <div class="cell" onclick="makeMove(7)"></div>
-    <div class="cell" onclick="makeMove(8)"></div>
+    <button
+        type="button"
+        class="cell"
+        data-index="2"
+        aria-label="Клетка 3"
+    ></button>
+
+    <button
+        type="button"
+        class="cell"
+        data-index="3"
+        aria-label="Клетка 4"
+    ></button>
+
+    <button
+        type="button"
+        class="cell"
+        data-index="4"
+        aria-label="Клетка 5"
+    ></button>
+
+    <button
+        type="button"
+        class="cell"
+        data-index="5"
+        aria-label="Клетка 6"
+    ></button>
+
+    <button
+        type="button"
+        class="cell"
+        data-index="6"
+        aria-label="Клетка 7"
+    ></button>
+
+    <button
+        type="button"
+        class="cell"
+        data-index="7"
+        aria-label="Клетка 8"
+    ></button>
+
+    <button
+        type="button"
+        class="cell"
+        data-index="8"
+        aria-label="Клетка 9"
+    ></button>
 
 </div>
 
 
-<button
-    type="button"
-    class="btn-bot"
-    onclick="exitGame()"
->
-    ← Выйти в меню
-</button>
+<div class="game-exit">
 
-</div><!-- ОКНО ПОПОЛНЕНИЯ --><div
+    <button
+        type="button"
+        class="btn-bot"
+        onclick="exitGame()"
+    >
+        ← Выйти в меню
+    </button>
+
+</div>
+
+</div><!-- =========================
+     DEPOSIT MODAL
+========================= --><div
     class="modal-overlay"
     id="deposit-modal"
 ><div class="modal">
@@ -601,60 +835,90 @@ button {
 </div><script>
 "use strict";
 
-/*
- * Telegram WebApp
- */
+/* =========================
+   TELEGRAM WEB APP
+========================= */
 
-const tg = window.Telegram && window.Telegram.WebApp
-    ? window.Telegram.WebApp
-    : null;
+const tg =
+    window.Telegram &&
+    window.Telegram.WebApp
+        ? window.Telegram.WebApp
+        : null;
 
 if (tg) {
+
     try {
+
         tg.ready();
 
         if (typeof tg.expand === "function") {
             tg.expand();
         }
+
     } catch (error) {
-        console.error("Telegram WebApp error:", error);
+
+        console.error(
+            "Telegram WebApp error:",
+            error
+        );
+
     }
+
 }
 
 
-/*
- * Пользователь Telegram
- */
+/* =========================
+   TELEGRAM USER
+========================= */
 
-const telegramUser = tg && tg.initDataUnsafe
-    ? tg.initDataUnsafe.user
-    : null;
+const telegramUser =
+    tg &&
+    tg.initDataUnsafe &&
+    tg.initDataUnsafe.user
+        ? tg.initDataUnsafe.user
+        : null;
 
-const userId = telegramUser && telegramUser.id
-    ? String(telegramUser.id)
-    : "guest_" + Math.floor(Math.random() * 1000000);
+const userId =
+    telegramUser &&
+    telegramUser.id
+        ? String(telegramUser.id)
+        : "guest_" + Math.floor(
+            Math.random() * 1000000
+        );
 
-const userName = telegramUser && telegramUser.first_name
-    ? telegramUser.first_name
-    : "";
+const userName =
+    telegramUser &&
+    telegramUser.first_name
+        ? telegramUser.first_name
+        : "";
 
 
-/*
- * Аватар
- */
+/* =========================
+   AVATAR
+========================= */
 
 if (userName) {
-    const avatar = document.getElementById("user-avatar");
+
+    const avatar =
+        document.getElementById(
+            "user-avatar"
+        );
 
     if (avatar) {
-        avatar.innerText = userName.charAt(0).toUpperCase();
+
+        avatar.innerText =
+            userName
+                .charAt(0)
+                .toUpperCase();
+
     }
+
 }
 
 
-/*
- * Состояние игры
- */
+/* =========================
+   GAME STATE
+========================= */
 
 let selectedStake = 10;
 
@@ -666,38 +930,45 @@ let boardState = [
     "",
     "",
     "",
+    "",
     ""
 ];
 
 let isBotGame = false;
+
 let gameActive = true;
 
 
-/*
- * Получение баланса
- */
+/* =========================
+   BALANCE
+========================= */
 
 async function refreshBalance() {
 
     try {
 
-        const response = await fetch(
-            `/api/get-balance/${encodeURIComponent(userId)}`
-        );
+        const response =
+            await fetch(
+                `/api/get-balance/${encodeURIComponent(userId)}`
+            );
 
         if (!response.ok) {
+
             throw new Error(
                 `HTTP ${response.status}`
             );
+
         }
 
-        const data = await response.json();
+        const data =
+            await response.json();
 
         if (data.success) {
 
             document.getElementById(
                 "stars-count"
-            ).innerText = Number(data.balance) || 0;
+            ).innerText =
+                Number(data.balance) || 0;
 
         }
 
@@ -709,74 +980,95 @@ async function refreshBalance() {
         );
 
     }
+
 }
 
 
-/*
- * Выбор ставки
- */
+/* =========================
+   STAKE
+========================= */
 
-function selectStake(amount, win, element) {
+function selectStake(
+    amount,
+    win,
+    element
+) {
 
-    selectedStake = Number(amount);
+    selectedStake =
+        Number(amount);
 
     document
-        .querySelectorAll(".stake-card")
-        .forEach(card => {
-            card.classList.remove("active");
-        });
+        .querySelectorAll(
+            ".stake-card"
+        )
+        .forEach(
+            card => {
+                card.classList.remove(
+                    "active"
+                );
+            }
+        );
 
     if (element) {
-        element.classList.add("active");
+        element.classList.add(
+            "active"
+        );
     }
 
 }
 
 
-/*
- * Открыть пополнение
- */
+/* =========================
+   DEPOSIT MODAL
+========================= */
 
 function openDepositModal() {
 
-    const modal = document.getElementById(
-        "deposit-modal"
-    );
+    const modal =
+        document.getElementById(
+            "deposit-modal"
+        );
 
     if (modal) {
-        modal.style.display = "flex";
+        modal.style.display =
+            "flex";
     }
 
 }
 
-
-/*
- * Закрыть пополнение
- */
 
 function closeDepositModal() {
 
-    const modal = document.getElementById(
-        "deposit-modal"
-    );
+    const modal =
+        document.getElementById(
+            "deposit-modal"
+        );
 
     if (modal) {
-        modal.style.display = "none";
+        modal.style.display =
+            "none";
     }
 
 }
 
 
-/*
- * Покупка Telegram Stars
- */
+/* =========================
+   BUY STARS
+========================= */
 
 async function buyStars(amount) {
 
     amount = Number(amount);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-        alert("Некорректная сумма.");
+    if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+    ) {
+
+        alert(
+            "Некорректная сумма."
+        );
+
         return;
     }
 
@@ -784,36 +1076,51 @@ async function buyStars(amount) {
 
     try {
 
-        const response = await fetch(
-            "/api/create-stars-invoice",
-            {
-                method: "POST",
+        const response =
+            await fetch(
+                "/api/create-stars-invoice",
+                {
+                    method: "POST",
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                body: JSON.stringify({
-                    userId: userId,
-                    amount: amount,
-                    title: `Пополнение ${amount} ⭐`
-                })
-            }
-        );
+                    body: JSON.stringify({
+                        userId: userId,
+                        amount: amount,
+                        title:
+                            `Пополнение ${amount} ⭐`
+                    })
+                }
+            );
+
 
         if (!response.ok) {
+
             throw new Error(
                 `HTTP ${response.status}`
             );
+
         }
 
-        const data = await response.json();
 
-        if (!data.success || !data.invoiceLink) {
+        const data =
+            await response.json();
+
+
+        if (
+            !data.success ||
+            !data.invoiceLink
+        ) {
 
             alert(
                 "Ошибка создания счёта: " +
-                (data.error || "Неизвестная ошибка")
+                (
+                    data.error ||
+                    "Неизвестная ошибка"
+                )
             );
 
             return;
@@ -821,12 +1128,13 @@ async function buyStars(amount) {
 
 
         /*
-         * Открытие официального Telegram Invoice
+         * Telegram Invoice
          */
 
         if (
             tg &&
-            typeof tg.openInvoice === "function"
+            typeof tg.openInvoice ===
+                "function"
         ) {
 
             tg.openInvoice(
@@ -834,11 +1142,14 @@ async function buyStars(amount) {
                 function(status) {
 
                     console.log(
-                        "Telegram invoice status:",
+                        "Invoice status:",
                         status
                     );
 
-                    if (status === "paid") {
+
+                    if (
+                        status === "paid"
+                    ) {
 
                         alert(
                             `Успешно оплачено! Начислено ${amount} ⭐`
@@ -849,13 +1160,12 @@ async function buyStars(amount) {
                             1500
                         );
 
-                    } else if (status === "cancelled") {
+                    }
 
-                        console.log(
-                            "Оплата отменена пользователем."
-                        );
 
-                    } else if (status === "failed") {
+                    if (
+                        status === "failed"
+                    ) {
 
                         alert(
                             "Оплата не прошла."
@@ -867,11 +1177,6 @@ async function buyStars(amount) {
             );
 
         } else {
-
-            /*
-             * Резервный вариант,
-             * если Mini App API недоступен.
-             */
 
             window.open(
                 data.invoiceLink,
@@ -888,7 +1193,8 @@ async function buyStars(amount) {
         );
 
         alert(
-            "Ошибка: " + error.message
+            "Ошибка: " +
+            error.message
         );
 
     }
@@ -896,9 +1202,9 @@ async function buyStars(amount) {
 }
 
 
-/*
- * Запуск игры с ботом
- */
+/* =========================
+   START BOT GAME
+========================= */
 
 function startBotGame() {
 
@@ -914,59 +1220,92 @@ function startBotGame() {
         "",
         "",
         "",
+        "",
         ""
     ];
+
 
     document.getElementById(
         "main-menu"
     ).style.display = "none";
 
+
     document.getElementById(
         "game-screen"
     ).style.display = "flex";
 
+
     document.getElementById(
         "game-status"
-    ).innerText = "Ваш ход (❌)";
+    ).innerText =
+        "Ваш ход (❌)";
+
+
+    document.getElementById(
+        "game-stake"
+    ).innerText =
+        "Тренировка • 0 ⭐";
+
 
     renderBoard();
 
 }
 
 
-/*
- * PvP
- *
- * Пока оставлено как заглушка.
- * Реальный matchmaking должен работать
- * через server.js / WebSocket.
- */
+/* =========================
+   PVP
+========================= */
 
 function startPvP() {
 
     alert(
         "Поиск соперника пока не подключён. " +
-        "Тренировочная игра с ботом доступна."
+        "Для проверки игры используйте тренировку с ботом."
     );
 
 }
 
 
-/*
- * Отрисовка поля
- */
+/* =========================
+   RENDER BOARD
+========================= */
 
 function renderBoard() {
 
-    const cells = document.querySelectorAll(
-        ".cell"
-    );
+    const cells =
+        document.querySelectorAll(
+            ".cell"
+        );
+
 
     cells.forEach(
-        (cell, index) => {
+        function(cell, index) {
+
+            const value =
+                boardState[index];
 
             cell.innerText =
-                boardState[index];
+                value;
+
+
+            cell.classList.remove(
+                "x",
+                "o"
+            );
+
+
+            if (value === "❌") {
+                cell.classList.add(
+                    "x"
+                );
+            }
+
+
+            if (value === "⭕") {
+                cell.classList.add(
+                    "o"
+                );
+            }
 
         }
     );
@@ -974,9 +1313,9 @@ function renderBoard() {
 }
 
 
-/*
- * Ход игрока
- */
+/* =========================
+   PLAYER MOVE
+========================= */
 
 function makeMove(index) {
 
@@ -984,25 +1323,39 @@ function makeMove(index) {
         return;
     }
 
-    if (boardState[index] !== "") {
+
+    if (
+        index < 0 ||
+        index > 8
+    ) {
         return;
     }
 
 
-    boardState[index] = "❌";
+    if (
+        boardState[index] !== ""
+    ) {
+        return;
+    }
+
+
+    boardState[index] =
+        "❌";
+
 
     renderBoard();
 
 
-    /*
-     * Проверка победы игрока
-     */
+    /* PLAYER WIN */
 
-    if (checkWin("❌")) {
+    if (
+        checkWin("❌")
+    ) {
 
         document.getElementById(
             "game-status"
-        ).innerText = "Победа! 🎉";
+        ).innerText =
+            "Победа! 🎉";
 
         gameActive = false;
 
@@ -1010,15 +1363,14 @@ function makeMove(index) {
     }
 
 
-    /*
-     * Проверка ничьей
-     */
+    /* DRAW */
 
     if (checkDraw()) {
 
         document.getElementById(
             "game-status"
-        ).innerText = "Ничья! 🤝";
+        ).innerText =
+            "Ничья! 🤝";
 
         gameActive = false;
 
@@ -1026,9 +1378,7 @@ function makeMove(index) {
     }
 
 
-    /*
-     * Ход бота
-     */
+    /* BOT */
 
     if (isBotGame) {
 
@@ -1036,7 +1386,8 @@ function makeMove(index) {
 
         document.getElementById(
             "game-status"
-        ).innerText = "Ход бота 🤖...";
+        ).innerText =
+            "Ход бота 🤖...";
 
 
         setTimeout(
@@ -1045,69 +1396,92 @@ function makeMove(index) {
                 const emptyCells =
                     boardState
                         .map(
-                            (value, index) =>
-                                value === ""
-                                    ? index
-                                    : null
+                            function(
+                                value,
+                                boardIndex
+                            ) {
+
+                                return value === ""
+                                    ? boardIndex
+                                    : null;
+
+                            }
                         )
                         .filter(
-                            value =>
-                                value !== null
+                            function(value) {
+
+                                return value !== null;
+
+                            }
                         );
 
 
-                if (emptyCells.length > 0) {
+                if (
+                    emptyCells.length === 0
+                ) {
 
-                    const randomIndex =
-                        Math.floor(
-                            Math.random() *
-                            emptyCells.length
-                        );
+                    gameActive = false;
 
-                    const botChoice =
-                        emptyCells[randomIndex];
-
-                    boardState[botChoice] =
-                        "⭕";
-
-                    renderBoard();
-
-
-                    /*
-                     * Проверка победы бота
-                     */
-
-                    if (checkWin("⭕")) {
-
-                        document.getElementById(
-                            "game-status"
-                        ).innerText =
-                            "Бот выиграл! 🤖";
-
-                        gameActive = false;
-
-                        return;
-                    }
-
-
-                    /*
-                     * Проверка ничьей
-                     */
-
-                    if (checkDraw()) {
-
-                        document.getElementById(
-                            "game-status"
-                        ).innerText =
-                            "Ничья! 🤝";
-
-                        gameActive = false;
-
-                        return;
-                    }
-
+                    return;
                 }
 
+
+                const randomIndex =
+                    Math.floor(
+                        Math.random() *
+                        emptyCells.length
+                    );
+
+
+                const botChoice =
+                    emptyCells[
+                        randomIndex
+                    ];
+
+
+                boardState[
+                    botChoice
+                ] = "⭕";
+
+
+                renderBoard();
+
+
+                /* BOT WIN */
+
+                if (
+                    checkWin("⭕")
+                ) {
+
+                    document.getElementById(
+                        "game-status"
+                    ).innerText =
+                        "Бот выиграл! 🤖";
+
+                    gameActive = false;
+
+                    return;
+                }
+
+
+                /* DRAW */
+
+                if (
+                    checkDraw()
+                ) {
+
+                    document.getElementById(
+                        "game-status"
+                    ).innerText =
+                        "Ничья! 🤝";
+
+                    gameActive = false;
+
+                    return;
+                }
+
+
+                /* PLAYER TURN */
 
                 gameActive = true;
 
@@ -1125,9 +1499,9 @@ function makeMove(index) {
 }
 
 
-/*
- * Проверка победы
- */
+/* =========================
+   WIN CHECK
+========================= */
 
 function checkWin(symbol) {
 
@@ -1146,73 +1520,142 @@ function checkWin(symbol) {
 
     ];
 
+
     return wins.some(
-        combination =>
-            combination.every(
-                index =>
-                    boardState[index] === symbol
-            )
+        function(combination) {
+
+            return combination.every(
+                function(index) {
+
+                    return (
+                        boardState[index] ===
+                        symbol
+                    );
+
+                }
+            );
+
+        }
     );
 
 }
 
 
-/*
- * Проверка ничьей
- */
+/* =========================
+   DRAW CHECK
+========================= */
 
 function checkDraw() {
 
     return boardState.every(
-        cell => cell !== ""
+        function(cell) {
+
+            return cell !== "";
+
+        }
     );
 
 }
 
 
-/*
- * Выход из игры
- */
+/* =========================
+   EXIT GAME
+========================= */
 
 function exitGame() {
 
-    document.getElementById(
-        "main-menu"
-    ).style.display = "flex";
+    gameActive = false;
 
     document.getElementById(
         "game-screen"
     ).style.display = "none";
 
-    gameActive = true;
+
+    document.getElementById(
+        "main-menu"
+    ).style.display = "flex";
+
+
+    boardState = [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+    ];
+
+
+    renderBoard();
 
 }
 
 
-/*
- * Закрытие модального окна
- * при клике вне него
- */
+/* =========================
+   CELL CLICK HANDLERS
+========================= */
 
 document
-    .getElementById("deposit-modal")
-    .addEventListener(
-        "click",
-        function(event) {
+    .querySelectorAll(".cell")
+    .forEach(
+        function(cell) {
 
-            if (
-                event.target === this
-            ) {
-                closeDepositModal();
-            }
+            cell.addEventListener(
+                "click",
+                function() {
+
+                    const index =
+                        Number(
+                            this.dataset.index
+                        );
+
+                    makeMove(index);
+
+                }
+            );
 
         }
     );
 
 
-/*
- * Первоначальная загрузка баланса
- */
+/* =========================
+   MODAL OUTSIDE CLICK
+========================= */
+
+const depositModal =
+    document.getElementById(
+        "deposit-modal"
+    );
+
+if (depositModal) {
+
+    depositModal.addEventListener(
+        "click",
+        function(event) {
+
+            if (
+                event.target ===
+                depositModal
+            ) {
+
+                closeDepositModal();
+
+            }
+
+        }
+    );
+
+}
+
+
+/* =========================
+   START
+========================= */
+
+renderBoard();
 
 refreshBalance();
 
