@@ -2,11 +2,9 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 
 app.use(express.json());
 app.use(express.static(__dirname));
@@ -26,7 +24,9 @@ try {
 function saveBalances() {
   try {
     fs.writeFileSync(BALANCES_FILE, JSON.stringify(userBalances, null, 2));
-  } catch (e) {}
+  } catch (e) {
+    console.error('Save error:', e);
+  }
 }
 
 app.get('/', (req, res) => {
@@ -99,24 +99,5 @@ app.post('/api/telegram-webhook', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('Server running on port ' + PORT);
+  console.log(`Server running on port ${PORT}`);
 });
-```eof
-
-I will also generate the clean `package.json` file.
-
-```json:package.json
-{
-  "name": "telegram-stars-backend",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  }
-}
-```eof
-
