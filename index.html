@@ -5,52 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>TicTacToe-cash</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="/socket.io/socket.io.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
 body { background: #0B0E17; color: #FFFFFF; padding: 16px; display: flex; flex-direction: column; gap: 16px; min-height: 100vh; }
-​/* Верхняя панель */
-.header { display: flex; justify-content: space-between; align-items: center; }
+​.header { display: flex; justify-content: space-between; align-items: center; }
 .profile { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 42px; height: 42px; background: #FF7700; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
 .league { font-size: 13px; color: #FFB700; display: flex; align-items: center; gap: 4px; }
 ​.balance-box { background: #161A26; border: 1px solid #252B3B; border-radius: 20px; padding: 6px 14px; display: flex; align-items: center; gap: 8px; }
 .balance-val { font-size: 18px; font-weight: 800; color: #FFF; }
 .add-btn { background: #FF9900; color: #000; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; border: none; font-size: 16px; }
-​/* Баннер */
-.banner { background: #161A26; border: 1px solid #252B3B; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
+​.banner { background: #161A26; border: 1px solid #252B3B; border-radius: 16px; padding: 20px; text-align: center; position: relative; }
 .badge { background: rgba(255, 153, 0, 0.15); color: #FF9900; font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 8px; border: 1px solid rgba(255, 153, 0, 0.3); }
 .banner h2 { font-size: 20px; margin-bottom: 6px; }
 .banner p { font-size: 13px; color: #8E92A8; }
-​/* Выбор ставки */
-.section-title { font-size: 12px; color: #6C728F; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 4px; }
+​.section-title { font-size: 12px; color: #6C728F; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 4px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .stake-card { background: #161A26; border: 2px solid #252B3B; border-radius: 16px; padding: 16px; text-align: center; cursor: pointer; transition: 0.2s; }
 .stake-card.active { border-color: #FF9900; background: #1F2436; }
 .stake-label { font-size: 12px; color: #8E92A8; margin-bottom: 4px; }
 .stake-amount { font-size: 22px; font-weight: 800; color: #FFF; }
 .win-amount { font-size: 12px; color: #00FF88; margin-top: 4px; font-weight: 600; }
-​/* Кнопки действия */
-.btn-pvp { background: linear-gradient(135deg, #FF9900, #FF5500); color: #FFF; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.3); }
+​.btn-pvp { background: linear-gradient(135deg, #FF9900, #FF5500); color: #FFF; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(255, 85, 0, 0.3); }
 .btn-bot { background: #161A26; color: #8E92A8; border: 1px solid #252B3B; padding: 14px; border-radius: 14px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
-​/* Окно пополнения (Модалка) */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100; }
+​.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100; }
 .modal { background: #161A26; border: 1px solid #252B3B; border-radius: 20px; padding: 20px; width: 100%; max-width: 360px; text-align: center; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .modal-title { font-size: 18px; font-weight: bold; }
 .close-btn { background: none; border: none; color: #8E92A8; font-size: 20px; cursor: pointer; }
 .stars-pack { background: #1F2436; border: 1px solid #252B3B; border-radius: 12px; padding: 14px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
 .stars-pack:hover { border-color: #FF9900; }
-​/* Игра */
-.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+​.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
 .cell { background: #161A26; border: 1px solid #252B3B; border-radius: 12px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; cursor: pointer; }
 </style>
 </head>
 <body>
-​<!-- Верхняя панель -->
-<div class="header">
+​<div class="header">
 <div class="profile">
-<div class="avatar">❓</div>
+<div class="avatar" id="user-avatar">👤</div>
 <div>
 <div class="league">🏆 Лига Азарта</div>
 </div>
@@ -61,8 +53,7 @@ body { background: #0B0E17; color: #FFFFFF; padding: 16px; display: flex; flex-d
 <button class="add-btn" onclick="openDepositModal()">+</button>
 </div>
 </div>
-​<!-- Главное меню -->
-<div id="main-menu" style="display: flex; flex-direction: column; gap: 14px;">
+​<div id="main-menu" style="display: flex; flex-direction: column; gap: 14px;">
 <div class="banner">
 <div class="badge">⚡ Комиссия стола: 10%</div>
 <h2>Крестики-Нолики на ⭐</h2>
@@ -94,8 +85,7 @@ body { background: #0B0E17; color: #FFFFFF; padding: 16px; display: flex; flex-d
 ​<button class="btn-pvp" onclick="startPvP()">👥 Искать живого игрока (PvP)</button>
 <button class="btn-bot" onclick="startBotGame()">🤖 Тренировка с Ботом (Без риска)</button>
 </div>
-​<!-- Игровое поле -->
-<div id="game-screen" style="display: none; text-align: center;">
+​<div id="game-screen" style="display: none; text-align: center;">
 <h3 id="game-status">Ваш ход!</h3>
 <div class="board" id="board">
 <div class="cell" onclick="makeMove(0)"></div>
@@ -110,37 +100,42 @@ body { background: #0B0E17; color: #FFFFFF; padding: 16px; display: flex; flex-d
 </div>
 <button class="btn-bot" style="margin-top: 16px; width: 100%;" onclick="exitGame()">Выйти в меню</button>
 </div>
-​<!-- Модалка Пополнения Telegram Stars -->
-<div class="modal-overlay" id="deposit-modal">
+​<div class="modal-overlay" id="deposit-modal">
 <div class="modal">
 <div class="modal-header">
 <div class="modal-title">🪙 Пополнить ⭐</div>
 <button class="close-btn" onclick="closeDepositModal()">✕</button>
 </div>
-<p style="font-size: 12px; color: #8E92A8; margin-bottom: 10px;">Приобретайте Telegram Stars через официальную оплату Telegram:</p>
+<p style="font-size: 12px; color: #8E92A8; margin-bottom: 10px;">Приобретайте Telegram Stars через официальную оплату:</p>
 ​<div class="stars-pack" onclick="buyStars(10)">
-<span style="font-weight: bold;">10 Telegram Stars</span>
+<span style="font-weight: bold;">Пакет 10 Звёзд</span>
 <span style="color: #FF9900; font-weight: bold;">10 ⭐</span>
 </div>
 <div class="stars-pack" onclick="buyStars(50)">
-<span style="font-weight: bold;">50 Telegram Stars</span>
+<span style="font-weight: bold;">Пакет 50 Звёзд</span>
 <span style="color: #FF9900; font-weight: bold;">50 ⭐</span>
 </div>
 <div class="stars-pack" onclick="buyStars(100)">
-<span style="font-weight: bold;">100 Telegram Stars</span>
+<span style="font-weight: bold;">Пакет 100 Звёзд</span>
 <span style="color: #FF9900; font-weight: bold;">100 ⭐</span>
 </div>
 </div>
 </div>
 ​<script>
 const tg = window.Telegram?.WebApp;
-if (tg) tg.ready();
+if (tg) {
+tg.ready();
+if (tg.expand) tg.expand();
+}
 ​const userId = tg?.initDataUnsafe?.user?.id ? tg.initDataUnsafe.user.id.toString() : 'guest_' + Math.floor(Math.random() * 10000);
-let selectedStake = 10;
+const userName = tg?.initDataUnsafe?.user?.first_name;
+if (userName) {
+document.getElementById('user-avatar').innerText = userName.charAt(0).toUpperCase();
+}
+​let selectedStake = 10;
 let boardState = ['', '', '', '', '', '', '', '', ''];
 let isBotGame = false;
-​// Обновление баланса с сервера
-async function refreshBalance() {
+​async function refreshBalance() {
 try {
 const res = await fetch(/api/get-balance/${userId});
 const data = await res.json();
@@ -157,8 +152,7 @@ el.classList.add('active');
 }
 ​function openDepositModal() { document.getElementById('deposit-modal').style.display = 'flex'; }
 function closeDepositModal() { document.getElementById('deposit-modal').style.display = 'none'; }
-​// РЕАЛЬНАЯ ПОКУПКА TELEGRAM STARS
-async function buyStars(amount) {
+​async function buyStars(amount) {
 closeDepositModal();
 try {
 const res = await fetch('/api/create-stars-invoice', {
@@ -169,10 +163,9 @@ body: JSON.stringify({ userId, amount, title: Пополнение ${amount} ⭐
 ​const data = await res.json();
 if (data.success && data.invoiceLink) {
 if (tg && tg.openInvoice) {
-// Вызов НАСТОЯЩЕГО окна Telegram Stars
 tg.openInvoice(data.invoiceLink, (status) => {
 if (status === 'paid') {
-setTimeout(refreshBalance, 1000);
+setTimeout(refreshBalance, 1500);
 alert(Успешно оплачено! Начислено ${amount} ⭐);
 } else {
 alert('Оплата отменена.');
@@ -182,14 +175,13 @@ alert('Оплата отменена.');
 window.open(data.invoiceLink, '_blank');
 }
 } else {
-alert('Ошибка счёта: ' + (data.error || 'Проверьте BOT_TOKEN'));
+alert('Ошибка счёта: ' + (data.error || 'Проверьте настройки бота'));
 }
 } catch (e) {
 alert('Ошибка: ' + e.message);
 }
 }
-​// Запуск игры с ботом
-function startBotGame() {
+​function startBotGame() {
 isBotGame = true;
 boardState = ['', '', '', '', '', '', '', '', ''];
 document.getElementById('main-menu').style.display = 'none';
@@ -198,7 +190,7 @@ document.getElementById('game-status').innerText = 'Тренировка с бо
 renderBoard();
 }
 ​function startPvP() {
-alert('Поиск соперника... Попробуйте сыграть с ботом, пока игроки подключаются!');
+alert('Поиск соперника... Попробуйте сыграть с ботом!');
 }
 ​function renderBoard() {
 const cells = document.querySelectorAll('.cell');
