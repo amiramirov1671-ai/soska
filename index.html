@@ -1,530 +1,125 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>X-O Cash League - Telegram Mini App</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Telegram WebApp SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        tg: {
-                            bg: '#0f172a',
-                            card: '#1e293b',
-                            accent: '#f59e0b',
-                            brand: '#38bdf8'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        
-        .cell-pop {
-            animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        @keyframes popIn {
-            0% { transform: scale(0.5); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        .win-glow {
-            animation: glow 1s infinite alternate;
-        }
-
-        @keyframes glow {
-            from { box-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
-            to { box-shadow: 0 0 25px rgba(56, 189, 248, 0.9); }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Telegram Mini App</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { background: var(--tg-theme-bg-color, #1a1a24); color: var(--tg-theme-text-color, #ffffff); padding: 15px; display: flex; flex-direction: column; height: 100vh; }
+​.card { background: var(--tg-theme-secondary-bg-color, #242432); border-radius: 12px; padding: 15px; margin-bottom: 15px; text-align: center; }
+.stars-balance { font-size: 24px; font-weight: bold; color: #ffd700; margin: 10px 0; }
+​button { background: #3390ec; color: #fff; border: none; padding: 12px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 8px; font-size: 15px; }
+button:active { opacity: 0.8; }
+button.stars-btn { background: linear-gradient(135deg, #ffaa00, #ff8800); }
+​.chat-box { flex: 1; background: var(--tg-theme-secondary-bg-color, #242432); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
+.messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 5px; }
+.msg { background: #2f2f42; padding: 8px 12px; border-radius: 8px; max-width: 80%; word-break: break-word; }
+.msg.my { align-self: flex-end; background: #3390ec; }
+.msg.system { align-self: center; background: transparent; color: #888; font-size: 12px; }
+​.input-row { display: flex; gap: 8px; margin-top: 10px; }
+.input-row input { flex: 1; background: #1a1a24; border: 1px solid #3a3a4c; color: #fff; padding: 10px; border-radius: 8px; outline: none; }
+.input-row button { width: auto; margin-top: 0; }
+</style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between">
-
-    <!-- Header -->
-    <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-            <div id="user-avatar" class="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center font-bold text-white shadow-md text-sm">
-                U
-            </div>
-            <div>
-                <h1 id="user-name" class="text-xs font-semibold text-white leading-tight">Игрок</h1>
-                <p class="text-[10px] text-amber-400 font-medium flex items-center gap-1">
-                    <i class="fa-solid fa-trophy text-[9px]"></i> Лига Азарта
-                </p>
-            </div>
-        </div>
-
-        <div class="flex items-center gap-2">
-            <div class="bg-slate-800 border border-slate-700/80 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-inner">
-                <i class="fa-solid fa-star text-amber-400 text-xs"></i>
-                <span id="user-balance" class="text-xs font-bold text-white">100</span>
-                <span class="text-[10px] text-slate-400">⭐️</span>
-            </div>
-            <button onclick="openDepositModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 w-7 h-7 rounded-full flex items-center justify-center transition active:scale-95 shadow-md font-bold">
-                <i class="fa-solid fa-plus text-xs"></i>
-            </button>
-        </div>
-    </header>
-
-    <!-- Main Screen -->
-    <main id="lobby-screen" class="p-4 flex-1 flex flex-col justify-between max-w-md mx-auto w-full">
-        <div class="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-1">
-            <div class="inline-flex items-center gap-1.5 bg-amber-500/20 px-2.5 py-0.5 rounded-full text-amber-400 text-[11px] font-bold">
-                <i class="fa-solid fa-bolt"></i> Комиссия стола: 10%
-            </div>
-            <h2 class="text-lg font-extrabold text-white">Крестики-Нолики на ⭐️</h2>
-            <p class="text-xs text-slate-400">Побеждайте соперников и забирайте игровой банк!</p>
-        </div>
-
-        <div class="space-y-3 my-4">
-            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Выберите ставку игры</h3>
-            
-            <div class="grid grid-cols-2 gap-3" id="stakes-grid">
-                <button onclick="selectStake(10)" class="stake-card bg-slate-800/90 border-2 border-slate-700 hover:border-amber-500/60 p-3.5 rounded-2xl flex flex-col items-center gap-1 transition active:scale-95 relative overflow-hidden group">
-                    <span class="text-xs text-slate-400">Ставка</span>
-                    <span class="text-lg font-black text-amber-400 flex items-center gap-1">10 ⭐️</span>
-                    <span class="text-[10px] text-emerald-400 font-medium">Выигрыш: 18 ⭐️</span>
-                </button>
-
-                <button onclick="selectStake(25)" class="stake-card active bg-slate-800/90 border-2 border-amber-500 p-3.5 rounded-2xl flex flex-col items-center gap-1 transition active:scale-95 relative overflow-hidden group shadow-lg shadow-amber-500/10">
-                    <span class="text-xs text-slate-400">Ставка</span>
-                    <span class="text-lg font-black text-amber-400 flex items-center gap-1">25 ⭐️</span>
-                    <span class="text-[10px] text-emerald-400 font-medium">Выигрыш: 45 ⭐️</span>
-                </button>
-
-                <button onclick="selectStake(50)" class="stake-card bg-slate-800/90 border-2 border-slate-700 hover:border-amber-500/60 p-3.5 rounded-2xl flex flex-col items-center gap-1 transition active:scale-95 relative overflow-hidden group">
-                    <span class="text-xs text-slate-400">Ставка</span>
-                    <span class="text-lg font-black text-amber-400 flex items-center gap-1">50 ⭐️</span>
-                    <span class="text-[10px] text-emerald-400 font-medium">Выигрыш: 90 ⭐️</span>
-                </button>
-
-                <button onclick="selectStake(100)" class="stake-card bg-slate-800/90 border-2 border-slate-700 hover:border-amber-500/60 p-3.5 rounded-2xl flex flex-col items-center gap-1 transition active:scale-95 relative overflow-hidden group">
-                    <span class="text-xs text-slate-400">Ставка</span>
-                    <span class="text-lg font-black text-amber-400 flex items-center gap-1">100 ⭐️</span>
-                    <span class="text-[10px] text-emerald-400 font-medium">Выигрыш: 180 ⭐️</span>
-                </button>
-            </div>
-        </div>
-
-        <div class="space-y-2.5">
-            <button onclick="startMatch('pvp')" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold py-3.5 px-4 rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition active:scale-98">
-                <i class="fa-solid fa-users text-sm"></i> Искать живого игрока (PvP)
-            </button>
-
-            <button onclick="startMatch('ai')" class="w-full bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold py-3 px-4 rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition active:scale-98 text-xs">
-                <i class="fa-solid fa-robot text-sky-400"></i> Тренировка с Ботом (Без риска)
-            </button>
-        </div>
-    </main>
-
-    <!-- Active Game Screen -->
-    <main id="game-screen" class="hidden p-4 flex-1 flex flex-col justify-between max-w-md mx-auto w-full">
-        <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-3 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full bg-sky-500/20 border border-sky-500/40 text-sky-400 font-black flex items-center justify-center text-sm">X</div>
-                <div>
-                    <p class="text-xs font-bold text-white" id="player-x-name">Вы</p>
-                    <p class="text-[10px] text-sky-400 font-semibold">Ваш ход</p>
-                </div>
-            </div>
-
-            <div class="text-center px-3 py-1 bg-slate-900 rounded-xl border border-amber-500/30">
-                <p class="text-[9px] text-slate-400 uppercase font-bold">Банк матча</p>
-                <p id="game-pot" class="text-sm font-black text-amber-400">50 ⭐️</p>
-            </div>
-
-            <div class="flex items-center gap-2 flex-row-reverse text-right">
-                <div class="w-8 h-8 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-400 font-black flex items-center justify-center text-sm">O</div>
-                <div>
-                    <p class="text-xs font-bold text-white" id="player-o-name">Соперник</p>
-                    <p class="text-[10px] text-slate-400" id="player-o-status">Ожидает</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="my-auto py-6">
-            <div class="grid grid-cols-3 gap-3 bg-slate-950 p-3 rounded-3xl border border-slate-800 shadow-2xl aspect-square" id="board">
-            </div>
-        </div>
-
-        <div class="flex items-center justify-between gap-3">
-            <button onclick="confirmQuitGame()" class="bg-slate-800 hover:bg-slate-700 text-slate-400 px-4 py-2.5 rounded-xl text-xs font-semibold border border-slate-700">
-                Сдаться
-            </button>
-            <div id="turn-banner" class="flex-1 bg-slate-800/80 border border-slate-700/60 py-2.5 px-3 rounded-xl text-center text-xs font-bold text-sky-400">
-                Сейчас ваш ход (X)
-            </div>
-        </div>
-    </main>
-
-    <!-- Search Modal -->
-    <div id="search-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center max-w-xs w-full space-y-4">
-            <div class="relative w-16 h-16 mx-auto flex items-center justify-center">
-                <div class="absolute inset-0 rounded-full border-4 border-amber-500/20 border-t-amber-500 animate-spin"></div>
-                <i class="fa-solid fa-magnifying-glass text-amber-400 text-lg"></i>
-            </div>
-            <div>
-                <h3 class="text-base font-bold text-white">Поиск соперника...</h3>
-                <p class="text-xs text-slate-400 mt-1">Подбираем игрока со ставкой <span id="search-stake-val" class="text-amber-400 font-bold">25 ⭐️</span></p>
-            </div>
-            <button onclick="cancelSearch()" class="text-xs text-slate-400 hover:text-white underline font-medium">Отмена</button>
-        </div>
-    </div>
-
-    <!-- Result Modal -->
-    <div id="result-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center max-w-xs w-full space-y-4 shadow-2xl">
-            <div id="result-icon-container" class="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl">🏆</div>
-            <div>
-                <h3 id="result-title" class="text-xl font-extrabold text-white">Победа!</h3>
-                <p id="result-subtitle" class="text-xs text-slate-300 mt-1">Вы выиграли <span class="text-amber-400 font-bold">+45 ⭐️</span></p>
-            </div>
-
-            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50 text-[11px] text-slate-400 space-y-1">
-                <div class="flex justify-between">
-                    <span>Ставка:</span>
-                    <span id="summary-stake" class="text-white font-bold">25 ⭐️</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>Комиссия сервиса (10%):</span>
-                    <span id="summary-fee" class="text-slate-400">5 ⭐️</span>
-                </div>
-                <div class="flex justify-between border-t border-slate-700 pt-1 text-emerald-400 font-bold">
-                    <span>Зачислено:</span>
-                    <span id="summary-payout">+45 ⭐️</span>
-                </div>
-            </div>
-
-            <button onclick="closeResultModal()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3 rounded-xl shadow-lg transition active:scale-95 text-xs">
-                Играть ещё
-            </button>
-        </div>
-    </div>
-
-    <!-- Deposit Modal -->
-    <div id="deposit-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 max-w-xs w-full space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
-                    <i class="fa-solid fa-coins text-amber-400"></i> Пополнить ⭐️
-                </h3>
-                <button onclick="closeModal('deposit-modal')" class="text-slate-400 hover:text-white text-xs">
-                    <i class="fa-solid fa-xmark text-sm"></i>
-                </button>
-            </div>
-
-            <p class="text-xs text-slate-300">Приобретайте Telegram Stars для участия в платных турнирах:</p>
-
-            <div class="space-y-2">
-                <button onclick="buyStars(50)" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl flex items-center justify-between transition">
-                    <span class="text-xs font-bold text-white">50 Stars ⭐️</span>
-                    <span class="text-xs font-bold text-amber-400">100 ₽</span>
-                </button>
-                <button onclick="buyStars(100)" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl flex items-center justify-between transition">
-                    <span class="text-xs font-bold text-white">100 Stars ⭐️</span>
-                    <span class="text-xs font-bold text-amber-400">200 ₽</span>
-                </button>
-                <button onclick="buyStars(250)" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl flex items-center justify-between transition">
-                    <span class="text-xs font-bold text-white">250 Stars ⭐️</span>
-                    <span class="text-xs font-bold text-amber-400">500 ₽</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const tg = window.Telegram?.WebApp;
-
-        let userBalance = 100;
-        let selectedStake = 25;
-        let currentGameMode = 'pvp';
-        let boardState = ['', '', '', '', '', '', '', '', ''];
-        let isPlayerTurn = true;
-        let isGameActive = false;
-        let searchTimer = null;
-
-        const WINNING_COMBOS = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]
-        ];
-
-        window.onload = function() {
-            if (tg) {
-                tg.ready();
-                tg.expand();
-                if (tg.initDataUnsafe?.user) {
-                    const u = tg.initDataUnsafe.user;
-                    document.getElementById('user-name').innerText = u.first_name || 'Игрок';
-                    if (u.first_name) {
-                        document.getElementById('user-avatar').innerText = u.first_name.charAt(0).toUpperCase();
-                    }
-                }
-            }
-            updateBalanceUI();
-            renderGrid();
-        };
-
-        function updateBalanceUI() {
-            document.getElementById('user-balance').innerText = userBalance;
-        }
-
-        function selectStake(amount) {
-            selectedStake = amount;
-            document.querySelectorAll('.stake-card').forEach(btn => {
-                btn.classList.remove('active', 'border-amber-500', 'shadow-lg', 'shadow-amber-500/10');
-                btn.classList.add('border-slate-700');
-            });
-
-            event.currentTarget.classList.remove('border-slate-700');
-            event.currentTarget.classList.add('active', 'border-amber-500', 'shadow-lg', 'shadow-amber-500/10');
-        }
-
-        function startMatch(mode) {
-            currentGameMode = mode;
-
-            if (userBalance < selectedStake && mode === 'pvp') {
-                openDepositModal();
-                return;
-            }
-
-            if (mode === 'pvp') {
-                document.getElementById('search-stake-val').innerText = `${selectedStake} ⭐️`;
-                document.getElementById('search-modal').classList.remove('hidden');
-
-                searchTimer = setTimeout(() => {
-                    document.getElementById('search-modal').classList.add('hidden');
-                    initGame('Алексей (PvP)');
-                }, 2500);
-            } else {
-                initGame('Бот Гроссмейстер');
-            }
-        }
-
-        function cancelSearch() {
-            if (searchTimer) clearTimeout(searchTimer);
-            document.getElementById('search-modal').classList.add('hidden');
-        }
-
-        function initGame(opponentName) {
-            if (currentGameMode === 'pvp') {
-                userBalance -= selectedStake;
-                updateBalanceUI();
-            }
-
-            boardState = ['', '', '', '', '', '', '', '', ''];
-            isGameActive = true;
-            isPlayerTurn = true;
-
-            const potAmount = currentGameMode === 'pvp' ? selectedStake * 2 : 0;
-            document.getElementById('game-pot').innerText = `${potAmount} ⭐️`;
-            document.getElementById('player-o-name').innerText = opponentName;
-
-            document.getElementById('lobby-screen').classList.add('hidden');
-            document.getElementById('game-screen').classList.remove('hidden');
-
-            updateTurnBanner("Сейчас ваш ход (X)");
-            renderGrid();
-        }
-
-        function renderGrid() {
-            const board = document.getElementById('board');
-            board.innerHTML = '';
-
-            boardState.forEach((cell, index) => {
-                const cellBtn = document.createElement('button');
-                cellBtn.className = `bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center font-black text-3xl transition active:scale-95 ${cell ? 'cell-pop' : ''}`;
-                
-                if (cell === 'X') {
-                    cellBtn.innerHTML = `<span class="text-sky-400">X</span>`;
-                } else if (cell === 'O') {
-                    cellBtn.innerHTML = `<span class="text-rose-400">O</span>`;
-                } else {
-                    cellBtn.innerHTML = '';
-                }
-
-                cellBtn.onclick = () => handleCellClick(index);
-                board.appendChild(cellBtn);
-            });
-        }
-
-        function handleCellClick(index) {
-            if (!isGameActive || !isPlayerTurn || boardState[index] !== '') return;
-
-            boardState[index] = 'X';
-            renderGrid();
-
-            if (checkWin('X')) {
-                finishMatch('win');
-                return;
-            } else if (checkDraw()) {
-                finishMatch('draw');
-                return;
-            }
-
-            isPlayerTurn = false;
-            updateTurnBanner("Ход соперника (O)...");
-
-            setTimeout(() => {
-                opponentMove();
-            }, 800);
-        }
-
-        function opponentMove() {
-            if (!isGameActive) return;
-
-            let moveIndex = -1;
-
-            if (currentGameMode === 'ai') {
-                moveIndex = getBestMove();
-            } else {
-                const emptyCells = boardState.map((v, i) => v === '' ? i : null).filter(v => v !== null);
-                if (emptyCells.length > 0) {
-                    moveIndex = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-                }
-            }
-
-            if (moveIndex !== -1) {
-                boardState[moveIndex] = 'O';
-                renderGrid();
-
-                if (checkWin('O')) {
-                    finishMatch('lose');
-                    return;
-                } else if (checkDraw()) {
-                    finishMatch('draw');
-                    return;
-                }
-            }
-
-            isPlayerTurn = true;
-            updateTurnBanner("Сейчас ваш ход (X)");
-        }
-
-        function getBestMove() {
-            for (let i = 0; i < 9; i++) {
-                if (boardState[i] === '') {
-                    boardState[i] = 'O';
-                    if (checkWin('O')) { boardState[i] = ''; return i; }
-                    boardState[i] = '';
-                }
-            }
-            for (let i = 0; i < 9; i++) {
-                if (boardState[i] === '') {
-                    boardState[i] = 'X';
-                    if (checkWin('X')) { boardState[i] = ''; return i; }
-                    boardState[i] = '';
-                }
-            }
-            if (boardState[4] === '') return 4;
-            const emptyCells = boardState.map((v, i) => v === '' ? i : null).filter(v => v !== null);
-            return emptyCells[Math.floor(Math.random() * emptyCells.length)];
-        }
-
-        function checkWin(symbol) {
-            return WINNING_COMBOS.some(combo => combo.every(idx => boardState[idx] === symbol));
-        }
-
-        function checkDraw() {
-            return boardState.every(cell => cell !== '');
-        }
-
-        function finishMatch(result) {
-            isGameActive = false;
-
-            const modal = document.getElementById('result-modal');
-            const icon = document.getElementById('result-icon-container');
-            const title = document.getElementById('result-title');
-            const subtitle = document.getElementById('result-subtitle');
-
-            const totalPot = selectedStake * 2;
-            const fee = Math.floor(totalPot * 0.10);
-            const payout = totalPot - fee;
-
-            document.getElementById('summary-stake').innerText = `${selectedStake} ⭐️`;
-            document.getElementById('summary-fee').innerText = `${fee} ⭐️`;
-
-            if (result === 'win') {
-                if (currentGameMode === 'pvp') {
-                    userBalance += payout;
-                    updateBalanceUI();
-                    document.getElementById('summary-payout').innerText = `+${payout} ⭐️`;
-                } else {
-                    document.getElementById('summary-payout').innerText = `0 ⭐️ (Тренировка)`;
-                }
-
-                icon.className = "w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
-                icon.innerHTML = "🏆";
-                title.innerText = "Вы победили!";
-                subtitle.innerText = currentGameMode === 'pvp' ? `Вы забираете банк: +${payout} ⭐️` : "Отличная игра против бота!";
-            } else if (result === 'lose') {
-                document.getElementById('summary-payout').innerText = `0 ⭐️`;
-                icon.className = "w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl bg-rose-500/20 text-rose-400 border border-rose-500/40";
-                icon.innerHTML = "❌";
-                title.innerText = "Поражение";
-                subtitle.innerText = currentGameMode === 'pvp' ? `Соперник забирает банк` : "Попробуйте ещё раз!";
-            } else {
-                if (currentGameMode === 'pvp') {
-                    userBalance += selectedStake;
-                    updateBalanceUI();
-                }
-                document.getElementById('summary-payout').innerText = `${selectedStake} ⭐️ (Возврат)`;
-                icon.className = "w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl bg-amber-500/20 text-amber-400 border border-amber-500/40";
-                icon.innerHTML = "🤝";
-                title.innerText = "Ничья!";
-                subtitle.innerText = "Ставки возвращены игрокам.";
-            }
-
-            modal.classList.remove('hidden');
-        }
-
-        function updateTurnBanner(msg) {
-            document.getElementById('turn-banner').innerText = msg;
-        }
-
-        function confirmQuitGame() {
-            if (confirm("Вы уверены, что хотите сдаться? Ваша ставка будет утеряна.")) {
-                finishMatch('lose');
-            }
-        }
-
-        function closeResultModal() {
-            document.getElementById('result-modal').classList.add('hidden');
-            document.getElementById('game-screen').classList.add('hidden');
-            document.getElementById('lobby-screen').classList.remove('hidden');
-        }
-
-        function openDepositModal() {
-            document.getElementById('deposit-modal').classList.remove('hidden');
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.add('hidden');
-        }
-
-        function buyStars(amount) {
-            userBalance += amount;
-            updateBalanceUI();
-            closeModal('deposit-modal');
-        }
-    </script>
+<body>
+​<div class="card">
+<div>Мой Баланс</div>
+<div class="stars-balance">⭐ <span id="stars-count">0</span> Stars</div>
+<button class="stars-btn" onclick="buyStars(50)">Купить 50 ⭐</button>
+<button class="stars-btn" onclick="buyStars(100)">Купить 100 ⭐</button>
+</div>
+​<div class="card">
+<button id="find-btn" onclick="findPartner()">🔍 Найти собеседника</button>
+</div>
+​<div class="chat-box">
+<div class="messages" id="messages">
+<div class="msg system">Нажмите «Найти собеседника», чтобы начать общение.</div>
+</div>
+<div class="input-row">
+<input type="text" id="msg-input" placeholder="Сообщение..." disabled />
+<button id="send-btn" onclick="sendMessage()" disabled>Отправить</button>
+</div>
+</div>
+​<script>
+const tg = window.Telegram?.WebApp;
+if (tg) tg.ready();
+​const socket = io();
+let starsBalance = 0;
+const userId = tg?.initDataUnsafe?.user?.id || 'guest_' + Math.floor(Math.random() * 10000);
+​socket.emit('register_user', { id: userId, name: tg?.initDataUnsafe?.user?.first_name || 'Гость' });
+​// Покупка звёзд через Telegram Stars API
+async function buyStars(amount) {
+try {
+const res = await fetch('/api/create-stars-invoice', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ userId, amount, title: Пополнение ${amount} ⭐ })
+});
+​const data = await res.json();
+if (data.success && data.invoiceLink) {
+if (tg && tg.openInvoice) {
+tg.openInvoice(data.invoiceLink, (status) => {
+if (status === 'paid') {
+starsBalance += amount;
+document.getElementById('stars-count').innerText = starsBalance;
+addMessage('Система', Вы успешно приобрели ${amount} ⭐!);
+} else {
+tg.showAlert('Оплата не была завершена.');
+}
+});
+} else {
+window.open(data.invoiceLink, '_blank');
+}
+} else {
+alert('Ошибка создания счета: ' + (data.error || 'Проверьте BOT_TOKEN'));
+}
+} catch (e) {
+alert('Ошибка запроса: ' + e.message);
+}
+}
+​function findPartner() {
+document.getElementById('find-btn').disabled = true;
+document.getElementById('find-btn').innerText = 'Поиск...';
+socket.emit('find_partner');
+}
+​function sendMessage() {
+const input = document.getElementById('msg-input');
+const text = input.value.trim();
+if (!text) return;
+​socket.emit('send_message', { text });
+addMessage('Вы', text, true);
+input.value = '';
+}
+​function addMessage(sender, text, isMy = false) {
+const msgDiv = document.createElement('div');
+msgDiv.className = msg ${isMy ? 'my' : ''};
+msgDiv.innerText = isMy ? text : ${sender}: ${text};
+const box = document.getElementById('messages');
+box.appendChild(msgDiv);
+box.scrollTop = box.scrollHeight;
+}
+​socket.on('waiting_for_partner', () => {
+addMessage('Система', 'Ожидание свободного собеседника...');
+});
+​socket.on('chat_start', () => {
+document.getElementById('find-btn').disabled = false;
+document.getElementById('find-btn').innerText = '🔄 Сменить собеседника';
+document.getElementById('msg-input').disabled = false;
+document.getElementById('send-btn').disabled = false;
+addMessage('Система', 'Собеседник найден! Приятного общения.');
+});
+​socket.on('receive_message', (data) => {
+addMessage('Собеседник', data.text);
+});
+​socket.on('partner_disconnected', () => {
+addMessage('Система', 'Собеседник отключился.');
+document.getElementById('msg-input').disabled = true;
+document.getElementById('send-btn').disabled = true;
+document.getElementById('find-btn').innerText = '🔍 Найти собеседника';
+});
+</script>
 </body>
 </html>
