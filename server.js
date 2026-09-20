@@ -10,8 +10,7 @@ const io = new Server(server);
 app.use(express.static(__dirname));
 ​const BOT_TOKEN = process.env.BOT_TOKEN || '8952416846:AAHq94RzNvFb7uZVacvrr1Y8j0UD7Q3gLCU';
 const BALANCES_FILE = path.join(__dirname, 'balances.json');
-​// Загрузка балансов из файла (чтобы не сбрасывались при перезапуске Render)
-let userBalances = {};
+​let userBalances = {};
 if (fs.existsSync(BALANCES_FILE)) {
 try {
 userBalances = JSON.parse(fs.readFileSync(BALANCES_FILE, 'utf8'));
@@ -29,14 +28,12 @@ console.error('Ошибка сохранения балансов:', e);
 ​app.get('/', (req, res) => {
 res.sendFile(path.join(__dirname, 'index.html'));
 });
-​// Получить баланс
-app.get('/api/get-balance/:userId', (req, res) => {
+​app.get('/api/get-balance/:userId', (req, res) => {
 const { userId } = req.params;
 const balance = userBalances[userId] || 0;
 res.json({ success: true, balance });
 });
-​// Telegram Stars: Создание ссылки на счет
-app.post('/api/create-stars-invoice', async (req, res) => {
+​app.post('/api/create-stars-invoice', async (req, res) => {
 const { userId, amount, title } = req.body;
 ​if (!BOT_TOKEN) {
 return res.status(400).json({ success: false, error: 'BOT_TOKEN не установлен' });
@@ -50,7 +47,7 @@ body: JSON.stringify({
 title: title || 'Пополнение Telegram Stars',
 description: Покупка ${amount} ⭐,
 payload: payloadData,
-currency: 'XTR', // Валюта Telegram Stars
+currency: 'XTR',
 prices: [{ label: ${amount} Stars, amount: Number(amount) }]
 })
 });
@@ -64,8 +61,7 @@ res.status(400).json({ success: false, error: data.description });
 res.status(500).json({ success: false, error: err.message });
 }
 });
-​// Telegram Webhook: Подтверждение платежей
-app.post('/api/telegram-webhook', async (req, res) => {
+​app.post('/api/telegram-webhook', async (req, res) => {
 const update = req.body;
 ​if (update.pre_checkout_query) {
 const preCheckoutQueryId = update.pre_checkout_query.id;
