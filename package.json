@@ -1,14 +1,16 @@
 {
-  "name": "tg-stars-tictactoe-pvp",
+  "name": "telegram-stars-tic-tac-toe",
   "version": "1.0.0",
-  "description": "Telegram Mini App TicTacToe with Stars and PvP",
+  "description": "Telegram Mini App: real-time PvP Tic-Tac-Toe with Telegram Stars invoices",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "dependencies": {
-    "express": "^4.19.2",
-    "ws": "^8.16.0",
-    "node-telegram-bot-api": "^0.65.1"
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
   }
 }
