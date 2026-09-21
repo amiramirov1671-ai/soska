@@ -7,7 +7,8 @@ const TelegramBot = require('node-telegram-bot-api');
 // === АВТОМАТИЧЕСКИЙ ДЕПЛОЙ ДЛЯ RENDER ===
 const PORT = process.env.PORT || 3000;
 // Код ниже автоматически пробует найти токен в вашем Render по популярным названиям:
-const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN || process.env.TOKEN;
+const BOT_TOKEN = '8952416846:AAHq94RzNvFb7uZVacvrr1Y8jOUD7Q3gLCU';
+
 
 if (!BOT_TOKEN) {
   console.error("КРИТИЧЕСКАЯ ОШИБКА: Токен бота не найден в переменных окружения Render!");
