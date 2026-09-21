@@ -373,10 +373,9 @@ function finishRoom(room, outcome) {
 
     room.winner = winnerPlayer.user.id;
   } else {
-    // Ничья
     for (const p of room.players) {
       p.user.stats.draws += 1;
-      p.user.wallet.pendingPrizeStars += room.stake; // Возврат ставки при ничьей
+      p.user.wallet.pendingPrizeStars += room.stake;
     }
   }
 
@@ -519,7 +518,7 @@ wss.on("connection", (ws, req) => {
       } else if (type === "cancel_search") {
         removeFromQueue(user.id);
         wsSend(ws, "search_cancelled");
-      } else if (type === "make_move") {
+      } else if  (type === "make_move") {
         const room = rooms.get(user.roomId);
         if (!room || room.ended) return wsSend(ws, "error", { message: "Матч не найден" });
 
@@ -579,7 +578,7 @@ wss.on("connection", (ws, req) => {
 });
 
 /* ----------------------- Запуск сервера --------------------------- */
-server.listen(PORT, async () => {
+server.listen(PORT, "0.0.0.0", async () => {
   console.log(`Server started on port ${PORT}`);
   console.log(`PUBLIC_URL: ${PUBLIC_URL}`);
 
