@@ -1,25 +1,6 @@
 /*
  * Telegram Mini App — Tic-Tac-Toe PvP
  * Node.js 18+, Express + ws.
- *
- * ВАЖНО ПО STARS:
- * 1) Mini App НЕ может самостоятельно списать Stars с пользователя.
- * 2) Для цифровой услуги сервер создаёт Telegram invoice в XTR.
- * 3) Telegram присылает pre_checkout_query, затем successful_payment.
- * 4) Только после successful_payment ставка считается оплаченной.
- * 5) Bot API не предоставляет обычный метод "перевести Stars пользователю".
- *    Поэтому payout ниже является внутренним расчётом приза, а не фальшивым
- *    переводом Stars. Для реального cash-out/выплаты нужен отдельный
- *    поддерживаемый Telegram/бизнес-механизм или внешний регулируемый платёжный
- *    контур, который вы подключите отдельно.
- *
- * Переменные окружения:
- * BOT_TOKEN=123:ABC...
- * PORT=10000                 (Render обычно передаёт PORT автоматически)
- * WEBHOOK_SECRET=любая-длинная-строка
- * WEBHOOK_AUTO_SETUP=true
- * AUTH_MAX_AGE_SEC=86400
- * HOUSE_FEE_PERCENT=10
  */
 
 const express = require("express");
@@ -32,14 +13,13 @@ const PORT = Number(process.env.PORT || 3000);
 const BOT_TOKEN = process.env.BOT_TOKEN || "";
 
 // --- АВТОМАТИЧЕСКОЕ ОПРЕДЕЛЕНИЕ PUBLIC_URL ---
-// Если переменная PUBLIC_URL не задана в Render, код автоматически формирует её на основе имени вашего сервиса
 let DEFAULT_URL = "";
 if (process.env.RENDER_EXTERNAL_URL) {
   DEFAULT_URL = process.env.RENDER_EXTERNAL_URL;
 } else if (process.env.RENDER_SERVICE_NAME) {
   DEFAULT_URL = `https://${process.env.RENDER_SERVICE_NAME}.onrender.com`;
 } else {
-  DEFAULT_URL = "https://soska-1.onrender.com"; // Резервный адрес для вашего проекта
+  DEFAULT_URL = "https://soska-1.onrender.com"; 
 }
 
 const PUBLIC_URL = (process.env.PUBLIC_URL || DEFAULT_URL).replace(/\/+$/, "");
@@ -206,8 +186,7 @@ async function createStakeInvoice(userId, stake) {
     description: `Участие в PvP матче — ${stake} Telegram Stars`,
     payload,
     currency: "XTR",
-    prices: [{ label: "Ставка", amount: stake }],
-    subscription_period: undefined
+    prices: [{ label: "Ставка", amount: stake }]
   });
 
   pendingPayments.set(payload, {
@@ -328,12 +307,13 @@ function getPlayer(room, userId) {
 }
 
 function checkWinner(board) {
-  const lines = [, [3,4,5], [6,7,8],
-, [1,4,7], [2,5,8],
-, [2,4,6]
+  const lines = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Горизонтали
+    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Вертикали
+    [0, 4, 8], [2, 4, 6]             // Диагонали
   ];
 
-  for (const [a,b,c] of lines) {
+  for (const [a, b, c] of lines) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
       return board[a];
     }
@@ -349,3 +329,267 @@ function stopTurnTimer(room) {
   }
 }
 
+function startTurnTimer(room) {
+  stopTurnTimer(room);
+  room.turnStartedAt = now();
+
+  room.turnTimer = setTimeout(() => {
+    if (room.ended) return;
+
+    const loser = room.players.find(p => p.symbol === room.turn);
+    const winner = room.players.find(p => p.symbol !== room.turn);
+
+    finishRoom(room, {
+      result: "timeout",
+      winnerSymbol: winner.symbol,
+      loserSymbol: loser.symbol
+    });
+  }, TURN_SECONDS * 1000);
+
+  broadcastRoom(room, "turn", {
+    turn: room.turn,
+    turnStartedAt: room.turnStartedAt,
+    turnSeconds: TURN_SECONDS
+  });
+}
+
+function finishRoom(room, outcome) {
+  if (room.ended) return;
+  room.ended = true;
+  stopTurnTimer(room);
+
+  const winnerPlayer = outcome.winnerSymbol ? room.players.find(p => p.symbol === outcome.winnerSymbol) : null;
+  const loserPlayer = outcome.loserSymbol ? room.players.find(p => p.symbol === outcome.loserSymbol) : null;
+
+  const gross = room.stake * 2;
+  const fee = Math.floor(gross * HOUSE_FEE_PERCENT / 100);
+  const netPrize = gross - fee;
+
+  if (winnerPlayer && loserPlayer) {
+    winnerPlayer.user.stats.wins += 1;
+    winnerPlayer.user.wallet.pendingPrizeStars += netPrize;
+
+    loserPlayer.user.stats.losses += 1;
+
+    room.winner = winnerPlayer.user.id;
+  } else {
+    // Ничья
+    for (const p of room.players) {
+      p.user.stats.draws += 1;
+      p.user.wallet.pendingPrizeStars += room.stake; // Возврат ставки при ничьей
+    }
+  }
+
+  broadcastRoom(room, "game_over", {
+    result: outcome.result,
+    winner: room.winner,
+    board: room.board,
+    players: room.players.map(p => ({
+      id: p.user.id,
+      stats: p.user.stats,
+      wallet: p.user.wallet
+    }))
+  });
+
+  for (const p of room.players) {
+    p.user.roomId = null;
+  }
+
+  rooms.delete(room.id);
+}
+
+/* -------------------------- HTTP Webhook --------------------------- */
+app.post("/webhook", async (req, res) => {
+  try {
+    const update = req.body;
+
+    if (update.pre_checkout_query) {
+      const query = update.pre_checkout_query;
+      await telegram("answerPreCheckoutQuery", {
+        pre_checkout_query_id: query.id,
+        ok: true
+      });
+      return res.sendStatus(200);
+    }
+
+    if (update.message && update.message.successful_payment) {
+      const payment = update.message.successful_payment;
+      const payload = payment.invoice_payload;
+      const chargeId = payment.telegram_payment_charge_id;
+
+      if (processedCharges.has(chargeId)) {
+        return res.sendStatus(200);
+      }
+      processedCharges.add(chargeId);
+
+      const pending = pendingPayments.get(payload);
+      if (pending) {
+        pending.status = "paid";
+        pending.chargeId = chargeId;
+
+        const user = users.get(pending.userId);
+        if (user) {
+          user.wallet.paidInStars += pending.stake;
+          wsSend(user.ws, "payment_success", { stake: pending.stake });
+        }
+      }
+
+      return res.sendStatus(200);
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Webhook error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* -------------------------- REST API ------------------------------- */
+app.post("/api/auth", (req, res) => {
+  try {
+    const { initData } = req.body;
+    const tgUser = validateInitData(initData);
+    const user = getOrCreateUser(tgUser);
+
+    res.json({ success: true, user: safeUser(user) });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/invoice", (req, res) => {
+  try {
+    const { initData, stake } = req.body;
+    const tgUser = validateInitData(initData);
+    const user = getOrCreateUser(tgUser);
+
+    const stakeNum = Number(stake);
+    if (!ALLOWED_STAKES.has(stakeNum)) {
+      return res.status(400).json({ success: false, error: "Недопустимая ставка" });
+    }
+
+    createStakeInvoice(user.id, stakeNum).then(result => {
+      res.json({ success: true, ...result });
+    }).catch(err => {
+      res.status(500).json({ success: false, error: err.message });
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+/* ----------------------- WebSocket Server -------------------------- */
+server.on("upgrade", (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, ws => {
+    wss.emit("connection", ws, req);
+  });
+});
+
+wss.on("connection", (ws, req) => {
+  ws.on("message", message => {
+    try {
+      const data = JSON.parse(message.toString());
+      const { type, initData } = data;
+
+      if (type === "auth") {
+        const tgUser = validateInitData(initData);
+        const user = getOrCreateUser(tgUser);
+
+        if (user.ws && user.ws !== ws && user.ws.readyState === 1) {
+          wsSend(user.ws, "auth_conflict", { message: "Сессия открыта в другом окне" });
+          user.ws.close();
+        }
+
+        user.ws = ws;
+        socketUsers.set(ws, user.id);
+
+        wsSend(ws, "auth_ok", { user: safeUser(user) });
+        return;
+      }
+
+      const user = userFromWs(ws);
+      if (!user) {
+        return wsSend(ws, "error", { message: "Требуется авторизация" });
+      }
+
+      if (type === "find_match") {
+        const stake = Number(data.stake);
+        enqueue(user, stake);
+        wsSend(ws, "searching", { stake });
+      } else if (type === "cancel_search") {
+        removeFromQueue(user.id);
+        wsSend(ws, "search_cancelled");
+      } else if (type === "make_move") {
+        const room = rooms.get(user.roomId);
+        if (!room || room.ended) return wsSend(ws, "error", { message: "Матч не найден" });
+
+        const player = getPlayer(room, user.id);
+        if (!player || player.symbol !== room.turn) {
+          return wsSend(ws, "error", { message: "Сейчас не ваш ход" });
+        }
+
+        const index = Number(data.index);
+        if (isNaN(index) || index < 0 || index > 8 || room.board[index]) {
+          return wsSend(ws, "error", { message: "Неверный ход" });
+        }
+
+        room.board[index] = player.symbol;
+        broadcastRoom(room, "move", { index, symbol: player.symbol, board: room.board });
+
+        const winnerSymbol = checkWinner(room.board);
+        if (winnerSymbol) {
+          if (winnerSymbol === "DRAW") {
+            finishRoom(room, { result: "draw" });
+          } else {
+            const winner = room.players.find(p => p.symbol === winnerSymbol);
+            const loser = room.players.find(p => p.symbol !== winnerSymbol);
+            finishRoom(room, { result: "win", winnerSymbol: winner.symbol, loserSymbol: loser.symbol });
+          }
+        } else {
+          room.turn = room.turn === "X" ? "O" : "X";
+          startTurnTimer(room);
+        }
+      }
+    } catch (err) {
+      wsSend(ws, "error", { message: err.message });
+    }
+  });
+
+  ws.on("close", () => {
+    const user = userFromWs(ws);
+    if (user) {
+      removeFromQueue(user.id);
+      if (user.roomId) {
+        const room = rooms.get(user.roomId);
+        if (room && !room.ended) {
+          const opponentPlayer = room.players.find(p => p.user.id !== user.id);
+          if (opponentPlayer) {
+            finishRoom(room, {
+              result: "disconnect",
+              winnerSymbol: opponentPlayer.symbol,
+              loserSymbol: getPlayer(room, user.id).symbol
+            });
+          }
+        }
+      }
+      socketUsers.delete(ws);
+      if (user.ws === ws) user.ws = null;
+    }
+  });
+});
+
+/* ----------------------- Запуск сервера --------------------------- */
+server.listen(PORT, async () => {
+  console.log(`Server started on port ${PORT}`);
+  console.log(`PUBLIC_URL: ${PUBLIC_URL}`);
+
+  if (WEBHOOK_AUTO_SETUP && BOT_TOKEN && PUBLIC_URL) {
+    try {
+      const webhookUrl = `${PUBLIC_URL}/webhook`;
+      await telegram("setWebhook", { url: webhookUrl });
+      console.log(`Telegram webhook successfully set to: ${webhookUrl}`);
+    } catch (err) {
+      console.error("Failed to setup Telegram webhook automatically:", err.message);
+    }
+  }
+});
