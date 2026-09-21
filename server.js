@@ -1,19 +1,25 @@
 const express = require('express');
 const path = require('path');
+
 const app = express();
 
-// Динамический порт: берем из настроек сервера (для деплоя) или 3000 для локальной разработки
+// Указываем порт, который требует Render, или 3000 для локального теста
 const PORT = process.env.PORT || 3000;
 
-// Разрешаем Express автоматически отдавать любые статические файлы (css, js, картинки) из папки "public"
-app.use(express.static(path.join(__dirname, 'public')));
+// Безопасно подключаем текущую папку (корень проекта, где лежит index.html)
+app.use(express.static(__dirname));
 
-// Отдаем главный HTML-файл
+// Обработка главной страницы
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Запускаем сервер
+// Универсальный обработчик для подстраховки (чтобы не было Not Found)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Запуск сервера
 app.listen(PORT, () => {
-  console.log(`Сервер запущен! Откройте http://localhost:${PORT} в браузере`);
+  console.log(`Server is running on port ${PORT}`);
 });
