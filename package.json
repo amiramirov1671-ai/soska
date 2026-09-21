@@ -1,13 +1,14 @@
 {
-"name": "telegram-stars-backend",
-"version": "1.0.0",
-"description": "Серверная часть",
-"main": "server.js",
-"scripts": {
-"start": "node server.js"
-},
-"dependencies": {
-"express": "^4.18.2",
-"socket.io": "^4.7.2"
-}
+  "name": "tg-stars-tictactoe-pvp",
+  "version": "1.0.0",
+  "description": "Telegram Mini App TicTacToe with Stars and PvP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.16.0",
+    "node-telegram-bot-api": "^0.65.1"
+  }
 }
