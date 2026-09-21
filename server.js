@@ -1,6 +1,22 @@
 /*
  * Telegram Mini App — Tic-Tac-Toe PvP
  * Node.js 18+, Express + ws.
+ *
+ * ИСПРАВЛЕНИЯ ОТ ИСХОДНОЙ ВЕРСИИ (кратко, см. комментарии "FIX:" по коду):
+ * 1. Ставка теперь реально списывается с баланса при старте матча, и игрок
+ *    не может попасть в очередь без оплаченного баланса — раньше платёж
+ *    никак не проверялся и не тратился, игра была "бесплатной" по факту.
+ * 2. Webhook Telegram теперь проверяет секретный токен (X-Telegram-Bot-Api-
+ *    Secret-Token) — раньше кто угодно мог отправить POST на /webhook с
+ *    поддельным successful_payment и начислить себе звёзды без оплаты.
+ * 3. Статика отдаётся из отдельной папки /public, а не из корня проекта —
+ *    раньше express.static(__dirname) отдавал наружу сам server.js,
+ *    package.json и т.д.
+ * 4. Переподключение: если игрок обновил страницу / потерял связь во время
+ *    матча, у него есть 20 секунд на возврат, прежде чем засчитывается
+ *    поражение — раньше любой обрыв соединения мгновенно засчитывал проигрыш.
+ * 5. Очистка старых записей в pendingPayments / processedCharges, чтобы
+ *    память не росла бесконечно.
  */
 
 const express = require("express");
@@ -19,7 +35,7 @@ if (process.env.RENDER_EXTERNAL_URL) {
 } else if (process.env.RENDER_SERVICE_NAME) {
   DEFAULT_URL = `https://${process.env.RENDER_SERVICE_NAME}.onrender.com`;
 } else {
-  DEFAULT_URL = "https://soska-1.onrender.com"; 
+  DEFAULT_URL = "https://soska-1.onrender.com";
 }
 
 const PUBLIC_URL = (process.env.PUBLIC_URL || DEFAULT_URL).replace(/\/+$/, "");
@@ -36,10 +52,13 @@ const WEBHOOK_AUTO_SETUP = String(process.env.WEBHOOK_AUTO_SETUP || "true").toLo
 const ALLOWED_STAKES = new Set([5, 10, 50, 100]);
 const TURN_SECONDS = 30;
 const SEARCH_LIMIT_MS = 5 * 60 * 1000;
+const RECONNECT_GRACE_MS = 20 * 1000; // FIX: время на переподключение перед техпоражением
+const PENDING_PAYMENT_TTL_MS = 24 * 60 * 60 * 1000; // FIX: чистка старых инвойсов
 
 const app = express();
 app.use(express.json({ limit: "256kb" }));
-app.use(express.static(path.join(__dirname)));
+// FIX: отдаём статику только из /public, а не из корня проекта с исходниками
+app.use(express.static(path.join(__dirname, "public")));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
@@ -161,6 +180,25 @@ function broadcastRoom(room, type, data = {}) {
   }
 }
 
+function roomStateFor(room) {
+  return {
+    roomId: room.id,
+    stake: room.stake,
+    board: room.board,
+    turn: room.turn,
+    turnStartedAt: room.turnStartedAt,
+    turnSeconds: TURN_SECONDS,
+    players: room.players.map(p => ({
+      id: p.user.id,
+      name: p.user.name,
+      username: p.user.username,
+      photoUrl: p.user.photoUrl,
+      symbol: p.symbol,
+      connected: p.connected
+    }))
+  };
+}
+
 /* ------------------------- Telegram API --------------------------- */
 async function telegram(method, body) {
   if (!BOT_TOKEN) throw new Error("BOT_TOKEN не настроен");
@@ -223,6 +261,12 @@ function enqueue(user, stake) {
   if (user.roomId) throw new Error("Вы уже находитесь в матче");
   if (user.queueStake != null) throw new Error("Вы уже ищете соперника");
 
+  // FIX: раньше в очередь можно было встать без оплаты — баланс никогда
+  // не проверялся и не списывался, ставка была чисто декоративной.
+  if (user.wallet.paidInStars < stake) {
+    throw new Error("Недостаточно средств для этой ставки. Пополните баланс.");
+  }
+
   let queue = queues.get(stake);
   if (!queue) {
     queue = [];
@@ -243,7 +287,8 @@ function enqueue(user, stake) {
       opponent &&
       opponent.ws &&
       opponent.ws.readyState === 1 &&
-      opponent.queueStake === stake
+      opponent.queueStake === stake &&
+      opponent.wallet.paidInStars >= stake // FIX: перепроверяем баланс соперника перед матчем
     ) {
       user.queueStake = null;
       opponent.queueStake = null;
@@ -265,13 +310,17 @@ function enqueue(user, stake) {
 
 /* --------------------------- Игра --------------------------------- */
 function createRoom(a, b, stake) {
+  // FIX: реально списываем ставку у обоих игроков в момент старта матча
+  a.wallet.paidInStars -= stake;
+  b.wallet.paidInStars -= stake;
+
   const room = {
     id: crypto.randomUUID(),
     stake,
     createdAt: now(),
     players: [
-      { user: a, symbol: "X", connected: true, paymentConfirmed: true },
-      { user: b, symbol: "O", connected: true, paymentConfirmed: true }
+      { user: a, symbol: "X", connected: true, disconnectTimer: null },
+      { user: b, symbol: "O", connected: true, disconnectTimer: null }
     ],
     board: Array(9).fill(null),
     turn: "X",
@@ -285,19 +334,10 @@ function createRoom(a, b, stake) {
   b.roomId = room.id;
   rooms.set(room.id, room);
 
-  broadcastRoom(room, "match_found", {
-    roomId: room.id,
-    stake,
-    board: room.board,
-    turn: room.turn,
-    players: room.players.map(p => ({
-      id: p.user.id,
-      name: p.user.name,
-      username: p.user.username,
-      photoUrl: p.user.photoUrl,
-      symbol: p.symbol
-    }))
-  });
+  broadcastRoom(room, "match_found", roomStateFor(room));
+  for (const p of room.players) {
+    wsSend(p.user.ws, "wallet_update", { wallet: p.user.wallet });
+  }
 
   startTurnTimer(room);
 }
@@ -353,10 +393,20 @@ function startTurnTimer(room) {
   });
 }
 
+function clearDisconnectTimers(room) {
+  for (const p of room.players) {
+    if (p.disconnectTimer) {
+      clearTimeout(p.disconnectTimer);
+      p.disconnectTimer = null;
+    }
+  }
+}
+
 function finishRoom(room, outcome) {
   if (room.ended) return;
   room.ended = true;
   stopTurnTimer(room);
+  clearDisconnectTimers(room); // FIX: не оставляем висящие таймеры после завершения
 
   const winnerPlayer = outcome.winnerSymbol ? room.players.find(p => p.symbol === outcome.winnerSymbol) : null;
   const loserPlayer = outcome.loserSymbol ? room.players.find(p => p.symbol === outcome.loserSymbol) : null;
@@ -375,7 +425,7 @@ function finishRoom(room, outcome) {
   } else {
     for (const p of room.players) {
       p.user.stats.draws += 1;
-      p.user.wallet.pendingPrizeStars += room.stake;
+      p.user.wallet.pendingPrizeStars += room.stake; // возврат ставки при ничьей
     }
   }
 
@@ -400,6 +450,20 @@ function finishRoom(room, outcome) {
 /* -------------------------- HTTP Webhook --------------------------- */
 app.post("/webhook", async (req, res) => {
   try {
+    // FIX: проверяем секретный токен Telegram, иначе кто угодно может
+    // подделать POST на /webhook с фальшивым successful_payment.
+    if (WEBHOOK_SECRET) {
+      const provided = req.get("x-telegram-bot-api-secret-token") || "";
+      const expected = Buffer.from(WEBHOOK_SECRET);
+      const given = Buffer.from(provided);
+      const valid =
+        given.length === expected.length &&
+        crypto.timingSafeEqual(given, expected);
+      if (!valid) {
+        return res.sendStatus(401);
+      }
+    }
+
     const update = req.body;
 
     if (update.pre_checkout_query) {
@@ -429,7 +493,7 @@ app.post("/webhook", async (req, res) => {
         const user = users.get(pending.userId);
         if (user) {
           user.wallet.paidInStars += pending.stake;
-          wsSend(user.ws, "payment_success", { stake: pending.stake });
+          wsSend(user.ws, "payment_success", { stake: pending.stake, wallet: user.wallet });
         }
       }
 
@@ -465,6 +529,11 @@ app.post("/api/invoice", (req, res) => {
     const stakeNum = Number(stake);
     if (!ALLOWED_STAKES.has(stakeNum)) {
       return res.status(400).json({ success: false, error: "Недопустимая ставка" });
+    }
+
+    // FIX: если баланса уже хватает, не создаём лишний инвойс
+    if (user.wallet.paidInStars >= stakeNum) {
+      return res.json({ success: true, sufficientBalance: true, wallet: user.wallet });
     }
 
     createStakeInvoice(user.id, stakeNum).then(result => {
@@ -503,6 +572,29 @@ wss.on("connection", (ws, req) => {
         socketUsers.set(ws, user.id);
 
         wsSend(ws, "auth_ok", { user: safeUser(user) });
+
+        // FIX: восстановление состояния при переподключении — раньше
+        // обновление страницы во время матча или поиска "теряло" игрока.
+        if (user.roomId) {
+          const room = rooms.get(user.roomId);
+          if (room && !room.ended) {
+            const player = getPlayer(room, user.id);
+            if (player) {
+              player.connected = true;
+              if (player.disconnectTimer) {
+                clearTimeout(player.disconnectTimer);
+                player.disconnectTimer = null;
+                const opponent = room.players.find(p => p.user.id !== user.id);
+                wsSend(opponent.user.ws, "opponent_reconnected", {});
+              }
+              wsSend(ws, "match_found", roomStateFor(room));
+            }
+          } else {
+            user.roomId = null;
+          }
+        } else if (user.queueStake != null) {
+          wsSend(ws, "searching", { stake: user.queueStake });
+        }
         return;
       }
 
@@ -518,7 +610,7 @@ wss.on("connection", (ws, req) => {
       } else if (type === "cancel_search") {
         removeFromQueue(user.id);
         wsSend(ws, "search_cancelled");
-      } else if  (type === "make_move") {
+      } else if (type === "make_move") {
         const room = rooms.get(user.roomId);
         if (!room || room.ended) return wsSend(ws, "error", { message: "Матч не найден" });
 
@@ -558,24 +650,52 @@ wss.on("connection", (ws, req) => {
     const user = userFromWs(ws);
     if (user) {
       removeFromQueue(user.id);
+
       if (user.roomId) {
         const room = rooms.get(user.roomId);
         if (room && !room.ended) {
+          const player = getPlayer(room, user.id);
           const opponentPlayer = room.players.find(p => p.user.id !== user.id);
-          if (opponentPlayer) {
-            finishRoom(room, {
-              result: "disconnect",
-              winnerSymbol: opponentPlayer.symbol,
-              loserSymbol: getPlayer(room, user.id).symbol
+
+          if (player) {
+            player.connected = false;
+            wsSend(opponentPlayer && opponentPlayer.user.ws, "opponent_disconnected", {
+              graceSeconds: RECONNECT_GRACE_MS / 1000
             });
+
+            // FIX: даём игроку время вернуться, вместо мгновенного техпоражения
+            player.disconnectTimer = setTimeout(() => {
+              if (room.ended) return;
+              finishRoom(room, {
+                result: "disconnect",
+                winnerSymbol: opponentPlayer.symbol,
+                loserSymbol: player.symbol
+              });
+            }, RECONNECT_GRACE_MS);
           }
         }
       }
+
       socketUsers.delete(ws);
       if (user.ws === ws) user.ws = null;
     }
   });
 });
+
+/* ------------------------- Фоновая очистка -------------------------- */
+// FIX: без этого pendingPayments и processedCharges растут бесконечно
+setInterval(() => {
+  const cutoff = now() - PENDING_PAYMENT_TTL_MS;
+  for (const [payload, payment] of pendingPayments) {
+    if (payment.createdAt < cutoff) {
+      pendingPayments.delete(payload);
+    }
+  }
+  // processedCharges не хранит временную метку — ограничиваем размер набора
+  if (processedCharges.size > 50000) {
+    processedCharges.clear();
+  }
+}, 60 * 60 * 1000).unref();
 
 /* ----------------------- Запуск сервера --------------------------- */
 server.listen(PORT, "0.0.0.0", async () => {
@@ -585,8 +705,13 @@ server.listen(PORT, "0.0.0.0", async () => {
   if (WEBHOOK_AUTO_SETUP && BOT_TOKEN && PUBLIC_URL) {
     try {
       const webhookUrl = `${PUBLIC_URL}/webhook`;
-      await telegram("setWebhook", { url: webhookUrl });
+      const params = { url: webhookUrl };
+      if (WEBHOOK_SECRET) params.secret_token = WEBHOOK_SECRET; // FIX: включаем secret_token в setWebhook
+      await telegram("setWebhook", params);
       console.log(`Telegram webhook successfully set to: ${webhookUrl}`);
+      if (!WEBHOOK_SECRET) {
+        console.warn("WARNING: WEBHOOK_SECRET не задан — установите его, иначе /webhook не защищён от подделки платежей.");
+      }
     } catch (err) {
       console.error("Failed to setup Telegram webhook automatically:", err.message);
     }
