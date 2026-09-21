@@ -1,103 +1,206 @@
 const express = require('express');
+const { WebSocketServer } = require('ws');
 const http = require('http');
 const path = require('path');
-const fs = require('fs');
+const TelegramBot = require('node-telegram-bot-api');
+
+// === АВТОМАТИЧЕСКИЙ ДЕПЛОЙ ДЛЯ RENDER ===
+const PORT = process.env.PORT || 3000;
+// Код ниже автоматически пробует найти токен в вашем Render по популярным названиям:
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN || process.env.TOKEN;
+
+if (!BOT_TOKEN) {
+  console.error("КРИТИЧЕСКАЯ ОШИБКА: Токен бота не найден в переменных окружения Render!");
+}
 
 const app = express();
-const server = http.createServer(app);
-
 app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname)));
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8952416846:AAHq94RzNvFb7uZVacvrr1Y8j0UD7Q3gLCU';
-const BALANCES_FILE = path.join(__dirname, 'balances.json');
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-let userBalances = {};
-try {
-  if (fs.existsSync(BALANCES_FILE)) {
-    userBalances = JSON.parse(fs.readFileSync(BALANCES_FILE, 'utf8'));
-  }
-} catch (e) {
-  userBalances = {};
-}
+// Имитация базы данных пользователей (в продакшене лучше использовать БД)
+const usersDb = {}; 
+let matchmakingQueue = null; // Очередь для поиска игры (содержит userId одного игрока)
+const activeGames = {}; // Хранилище запущенных матчей
 
-function saveBalances() {
-  try {
-    fs.writeFileSync(BALANCES_FILE, JSON.stringify(userBalances, null, 2));
-  } catch (e) {
-    console.error('Save error:', e);
-  }
-}
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/api/get-balance/:userId', (req, res) => {
-  const { userId } = req.params;
-  const balance = userBalances[userId] || 0;
-  res.json({ success: true, balance });
-});
-
-app.post('/api/create-stars-invoice', async (req, res) => {
-  const { userId, amount, title } = req.body;
-  try {
-    const payloadData = JSON.stringify({ userId: userId.toString(), amount: Number(amount) });
-    const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: title || 'Telegram Stars Top-up',
-        description: `Purchase ${amount} Stars`,
-        payload: payloadData,
-        currency: 'XTR',
-        prices: [{ label: `${amount} Stars`, amount: Number(amount) }]
-      })
-    });
-    const data = await response.json();
-    if (data.ok) {
-      res.json({ success: true, invoiceLink: data.result });
-    } else {
-      res.status(400).json({ success: false, error: data.description });
+// Получение или создание профиля пользователя
+function getUser(userId, name = "Игрок") {
+    if (!usersDb[userId]) {
+        usersDb[userId] = { userId, name, balance: 10, ws: null }; // Даем 10 приветственных звезд
     }
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
+    return usersDb[userId];
+}
 
-app.post('/api/telegram-webhook', async (req, res) => {
-  const update = req.body;
-  if (update.pre_checkout_query) {
+// Эндпоинт для генерации счета на покупку Звезд
+app.post('/create-stars-invoice', async (req, res) => {
+    const { userId } = req.body;
     try {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pre_checkout_query_id: update.pre_checkout_query.id, ok: true })
-      });
-    } catch (e) {}
-    return res.sendStatus(200);
-  }
-
-  if (update.message && update.message.successful_payment) {
-    const payment = update.message.successful_payment;
-    let targetUserId = update.message.from.id.toString();
-    let starsPaid = payment.total_amount;
-    try {
-      const payloadObj = JSON.parse(payment.invoice_payload);
-      if (payloadObj.userId) targetUserId = payloadObj.userId.toString();
-      if (payloadObj.amount) starsPaid = payloadObj.amount;
-    } catch (e) {}
-
-    if (!userBalances[targetUserId]) userBalances[targetUserId] = 0;
-    userBalances[targetUserId] += starsPaid;
-    saveBalances();
-    return res.sendStatus(200);
-  }
-
-  res.sendStatus(200);
+        // Создаем инвойс на 10 звезд внутри Телеграм [1.1]
+        const invoiceLink = await bot.createInvoiceLink(
+            "Пополнение игрового баланса",
+            "10 Звезд для игры в Крестики-Нолики",
+            "stars_topup_" + userId,
+            "", // Провайдер пустой для Telegram Stars [1.1]
+            "XTR", // Код валюты для Telegram Stars строго XTR [1.1]
+            [{ label: "10 Звезд", amount: 10 }]
+        );
+        res.json({ invoiceLink });
+    } catch (err) {
+        res.status(500).json({ error: "Ошибка создания инвойса" });
+    }
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+// Обработка успешного платежа в Telegram-боте [1.1]
+bot.on('pre_checkout_query', (query) => {
+    bot.answerPreCheckoutQuery(query.id, true);
 });
+
+bot.on('successful_payment', (msg) => {
+    const payload = msg.successful_payment.invoice_payload;
+    if (payload.startsWith("stars_topup_")) {
+        const userId = payload.split("_");
+        const user = getUser(userId);
+        user.balance += 10; // Добавляем купленные 10 звезд
+        if (user.ws) {
+            user.ws.send(JSON.stringify({ type: 'userData', balance: user.balance }));
+        }
+    }
+});
+
+// Логика проверки победы в игре
+function checkWinner(board) {
+    const lines = [, [3, 4, 5], [6, 7, 8], // Горизонтали, [1, 4, 7], [2, 5, 8], // Вертикали, [2, 4, 6]             // Диагонали
+    ];
+    for (let line of lines) {
+        const [a, b, c] = line;
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+            return board[a];
+        }
+    }
+    if (board.every(cell => cell !== null)) return 'draw';
+    return null;
+}
+
+// Работа по WebSockets
+wss.on('connection', (ws) => {
+    let currentUserId = null;
+
+    ws.on('message', (message) => {
+        const data = JSON.parse(message);
+
+        if (data.type === 'auth') {
+            currentUserId = data.userId;
+            const user = getUser(data.userId, data.name);
+            user.ws = ws;
+            ws.send(JSON.stringify({ type: 'userData', balance: user.balance }));
+        }
+
+        if (data.type === 'get_balance') {
+            const user = getUser(data.userId);
+            ws.send(JSON.stringify({ type: 'userData', balance: user.balance }));
+        }
+
+        if (data.type === 'search_game') {
+            const user = getUser(data.userId);
+            const STAKE = 5; // Ставка на игру
+
+            if (user.balance < STAKE) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Недостаточно Звезд для ставки! Нужно 5 ⭐.' }));
+                return;
+            }
+
+            // Если игрок уже в очереди, ничего не делаем
+            if (matchmakingQueue === user.userId) return;
+
+            // Если есть кто-то в очереди — запускаем матч
+            if (matchmakingQueue && matchmakingQueue !== user.userId) {
+                const opponentId = matchmakingQueue;
+                const opponent = getUser(opponentId);
+                matchmakingQueue = null;
+
+                // Списываем ставки с обоих
+                user.balance -= STAKE;
+                opponent.balance -= STAKE;
+
+                const gameId = `game_${user.userId}_${opponentId}`;
+                activeGames[gameId] = {
+                    players: { X: opponentId, O: user.userId },
+                    board: Array(9).fill(null),
+                    turn: 'X'
+                };
+
+                user.gameId = gameId;
+                opponent.gameId = gameId;
+
+                // Отправляем сигналы о старте матча
+                opponent.ws.send(JSON.stringify({ type: 'gameStart', symbol: 'X', opponentName: user.name }));
+                user.ws.send(JSON.stringify({ type: 'gameStart', symbol: 'O', opponentName: opponent.name }));
+            } else {
+                // Если очередь пуста, встаем в нее
+                matchmakingQueue = user.userId;
+                ws.send(JSON.stringify({ type: 'waiting' }));
+            }
+        }
+
+        if (data.type === 'make_move') {
+            const user = getUser(data.userId);
+            const game = activeGames[user.gameId];
+            if (!game) return;
+
+            const playerSymbol = game.players.X === user.userId ? 'X' : 'O';
+            if (game.turn !== playerSymbol || game.board[data.index] !== null) return;
+
+            // Делаем ход
+            game.board[data.index] = playerSymbol;
+            game.turn = game.turn === 'X' ? 'O' : 'X';
+
+            const p1 = getUser(game.players.X);
+            const p2 = getUser(game.players.O);
+
+            const msgUpdate = JSON.stringify({ type: 'update', index: data.index, symbol: playerSymbol, nextTurn: game.turn });
+            if (p1.ws) p1.ws.send(msgUpdate);
+            if (p2.ws) p2.ws.send(msgUpdate);
+
+            // Проверяем окончание игры
+            const winner = checkWinner(game.board);
+            if (winner) {
+                if (winner === 'draw') {
+                    // При ничьей возвращаем ставки (по 5 звезд)
+                    p1.balance += 5;
+                    p2.balance += 5;
+                } else {
+                    // Победитель забирает банк (10 звезд за вычетом комиссии 1 звезда серверу)
+                    const winnerId = game.players[winner];
+                    getUser(winnerId).balance += 9; 
+                }
+
+                const msgOver = JSON.stringify({ type: 'gameOver', winner });
+                if (p1.ws) p1.ws.send(msgOver);
+                if (p2.ws) p2.ws.send(msgOver);
+
+                delete activeGames[user.gameId];
+            }
+        }
+    });
+
+    ws.on('close', () => {
+        if (matchmakingQueue === currentUserId) matchmakingQueue = null;
+        const user = getUser(currentUserId);
+        if (user && user.gameId && activeGames[user.gameId]) {
+            const game = activeGames[user.gameId];
+            const opponentId = game.players.X === currentUserId ? game.players.O : game.players.X;
+            const opponent = getUser(opponentId);
+            
+            // Если игрок ливнул во время матча, оппонент побеждает и забирает банк
+            opponent.balance += 9;
+            if (opponent.ws) opponent.ws.send(JSON.stringify({ type: 'opponentLeft' }));
+            
+            delete activeGames[user.gameId];
+        }
+    });
+});
+
+server.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
