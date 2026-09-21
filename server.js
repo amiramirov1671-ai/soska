@@ -20,7 +20,23 @@ app.use(express.static(path.join(__dirname)));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+// Автоматически определяем адрес вашего Render сервера
+const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL;
+const bot = new TelegramBot(BOT_TOKEN);
+
+if (RENDER_EXTERNAL_URL) {
+    bot.setWebHook(`${RENDER_EXTERNAL_URL}/bot${BOT_TOKEN}`);
+    console.log(`Вебхук успешно установлен на адрес: ${RENDER_EXTERNAL_URL}`);
+} else {
+    console.log("Локальный запуск, вебхук не установлен");
+}
+
+// Эндпоинт для приема сообщений от Telegram через вебхук
+app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+});
+
 
 // Имитация базы данных пользователей (в продакшене лучше использовать БД)
 const usersDb = {}; 
