@@ -1,223 +1,201 @@
 const express = require('express');
 const { WebSocketServer } = require('ws');
 const http = require('http');
-const path = require('path');
 const TelegramBot = require('node-telegram-bot-api');
 
-// === АВТОМАТИЧЕСКИЙ ДЕПЛОЙ ДЛЯ RENDER ===
+// =========================================================================
+// 1. НАСТРОЙКА: ВСТАВЬТЕ СЮДА ВАШ ТОКЕН ИЗ BOTFATHER МЕЖДУ ОДИНАРНЫМИ КАВЫЧКАМИ
+const BOT_TOKEN = '8952416846:AAHq94RzNvFb7uZVacvrr1Y8jOUD7Q3gLCU'; 
+// =========================================================================
+
 const PORT = process.env.PORT || 3000;
-// Код ниже автоматически пробует найти токен в вашем Render по популярным названиям:
-const BOT_TOKEN = '8952416846:AAHq94RzNvFb7uZVacvrr1Y8jOUD7Q3gLCU';
-
-
-if (!BOT_TOKEN) {
-  console.error("КРИТИЧЕСКАЯ ОШИБКА: Токен бота не найден в переменных окружения Render!");
-}
-
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
+
+// Разрешаем запросы со всех адресов, чтобы Telegram Mini App не блокировался
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
-// Автоматически определяем адрес вашего Render сервера
-const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL;
 const bot = new TelegramBot(BOT_TOKEN);
 
-if (RENDER_EXTERNAL_URL) {
-    bot.setWebHook(`${RENDER_EXTERNAL_URL}/bot${BOT_TOKEN}`);
-    console.log(`Вебхук успешно установлен на адрес: ${RENDER_EXTERNAL_URL}`);
-} else {
-    console.log("Локальный запуск, вебхук не установлен");
-}
+// Настройка правильного вебхука для Render
+const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://onrender.com';
+bot.setWebHook(`${RENDER_EXTERNAL_URL}/bot${BOT_TOKEN}`).catch(err => console.log("Ошибка вебхука:", err));
 
-// Эндпоинт для приема сообщений от Telegram через вебхук
+// Обработчик вебхука Telegram
 app.post(`/bot${BOT_TOKEN}`, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-
-// Имитация базы данных пользователей (в продакшене лучше использовать БД)
-const usersDb = {}; 
-let matchmakingQueue = null; // Очередь для поиска игры (содержит userId одного игрока)
-const activeGames = {}; // Хранилище запущенных матчей
-
-// Получение или создание профиля пользователя
-function getUser(userId, name = "Игрок") {
-    if (!usersDb[userId]) {
-        usersDb[userId] = { userId, name, balance: 10, ws: null }; // Даем 10 приветственных звезд
-    }
-    return usersDb[userId];
-}
-
-// Эндпоинт для генерации счета на покупку Звезд
-app.post('/create-stars-invoice', async (req, res) => {
-    const { userId } = req.body;
-    try {
-        // Создаем инвойс на 10 звезд внутри Телеграм [1.1]
-        const invoiceLink = await bot.createInvoiceLink(
-            "Пополнение игрового баланса",
-            "10 Звезд для игры в Крестики-Нолики",
-            "stars_topup_" + userId,
-            "", // Провайдер пустой для Telegram Stars [1.1]
-            "XTR", // Код валюты для Telegram Stars строго XTR [1.1]
-            [{ label: "10 Звезд", amount: 10 }]
-        );
-        res.json({ invoiceLink });
-    } catch (err) {
-        res.status(500).json({ error: "Ошибка создания инвойса" });
-    }
-});
-
-// Обработка успешного платежа в Telegram-боте [1.1]
-bot.on('pre_checkout_query', (query) => {
-    bot.answerPreCheckoutQuery(query.id, true);
-});
-
-bot.on('successful_payment', (msg) => {
-    const payload = msg.successful_payment.invoice_payload;
-    if (payload.startsWith("stars_topup_")) {
-        const userId = payload.split("_");
-        const user = getUser(userId);
-        user.balance += 10; // Добавляем купленные 10 звезд
-        if (user.ws) {
-            user.ws.send(JSON.stringify({ type: 'userData', balance: user.balance }));
+// КРАСИВЫЙ НЕОНОВЫЙ ФРОНТЕНД (ОТДАЕТСЯ НАПРЯМУЮ С СЕРВЕРА)
+app.get('/', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neon Stars TicTacToe</title>
+    <script src="https://telegram.org"></script>
+    <style>
+        :root {
+            --bg-color: #0a0a12;
+            --neon-pink: #ff007f;
+            --neon-cyan: #00f3ff;
+            --neon-purple: #9d00ff;
+            --text-color: #ffffff;
         }
-    }
-});
-
-// Логика проверки победы в игре
-function checkWinner(board) {
-    const lines = [, [3, 4, 5], [6, 7, 8], // Горизонтали, [1, 4, 7], [2, 5, 8], // Вертикали, [2, 4, 6]             // Диагонали
-    ];
-    for (let line of lines) {
-        const [a, b, c] = line;
-        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-            return board[a];
+        body {
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column;
+            align-items: center; justify-content: space-between; min-height: 100vh; box-sizing: border-box; overflow: hidden;
         }
-    }
-    if (board.every(cell => cell !== null)) return 'draw';
-    return null;
-}
-
-// Работа по WebSockets
-wss.on('connection', (ws) => {
-    let currentUserId = null;
-
-    ws.on('message', (message) => {
-        const data = JSON.parse(message);
-
-        if (data.type === 'auth') {
-            currentUserId = data.userId;
-            const user = getUser(data.userId, data.name);
-            user.ws = ws;
-            ws.send(JSON.stringify({ type: 'userData', balance: user.balance }));
+        .header {
+            width: 100%; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+            box-sizing: border-box; background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
         }
-
-        if (data.type === 'get_balance') {
-            const user = getUser(data.userId);
-            ws.send(JSON.stringify({ type: 'userData', balance: user.balance }));
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .username { font-weight: bold; text-shadow: 0 0 5px var(--neon-cyan); }
+        .balance-container {
+            display: flex; align-items: center; gap: 5px; background: rgba(255, 0, 127, 0.1);
+            padding: 5px 12px; border-radius: 20px; border: 1px solid var(--neon-pink); box-shadow: 0 0 10px rgba(255, 0, 127, 0.2);
         }
-
-        if (data.type === 'search_game') {
-            const user = getUser(data.userId);
-            const STAKE = 5; // Ставка на игру
-
-            if (user.balance < STAKE) {
-                ws.send(JSON.stringify({ type: 'error', message: 'Недостаточно Звезд для ставки! Нужно 5 ⭐.' }));
-                return;
-            }
-
-            // Если игрок уже в очереди, ничего не делаем
-            if (matchmakingQueue === user.userId) return;
-
-            // Если есть кто-то в очереди — запускаем матч
-            if (matchmakingQueue && matchmakingQueue !== user.userId) {
-                const opponentId = matchmakingQueue;
-                const opponent = getUser(opponentId);
-                matchmakingQueue = null;
-
-                // Списываем ставки с обоих
-                user.balance -= STAKE;
-                opponent.balance -= STAKE;
-
-                const gameId = `game_${user.userId}_${opponentId}`;
-                activeGames[gameId] = {
-                    players: { X: opponentId, O: user.userId },
-                    board: Array(9).fill(null),
-                    turn: 'X'
-                };
-
-                user.gameId = gameId;
-                opponent.gameId = gameId;
-
-                // Отправляем сигналы о старте матча
-                opponent.ws.send(JSON.stringify({ type: 'gameStart', symbol: 'X', opponentName: user.name }));
-                user.ws.send(JSON.stringify({ type: 'gameStart', symbol: 'O', opponentName: opponent.name }));
-            } else {
-                // Если очередь пуста, встаем в нее
-                matchmakingQueue = user.userId;
-                ws.send(JSON.stringify({ type: 'waiting' }));
-            }
+        .star-icon { color: #ffca28; font-size: 18px; }
+        .main-container {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; max-width: 400px; padding: 20px; box-sizing: border-box; gap: 25px;
         }
+        .status-text { font-size: 18px; text-align: center; min-height: 24px; text-shadow: 0 0 8px var(--text-color); }
+        .board {
+            display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 10px;
+            width: 90vw; height: 90vw; max-width: 320px; max-height: 320px; background: rgba(157, 0, 255, 0.05);
+            border-radius: 15px; padding: 10px; border: 2px solid var(--neon-purple); box-shadow: 0 0 20px rgba(157, 0, 255, 0.3);
+        }
+        .cell {
+            background: rgba(10, 10, 18, 0.8); border-radius: 8px; display: flex; align-items: center;
+            justify-content: center; font-size: 48px; font-weight: 900; cursor: pointer; transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .cell:active { transform: scale(0.95); }
+        .cell.x { color: var(--neon-cyan); text-shadow: 0 0 15px var(--neon-cyan); }
+        .cell.o { color: var(--neon-pink); text-shadow: 0 0 15px var(--neon-pink); }
+        .actions { width: 100%; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+        .btn {
+            background: transparent; color: white; border: 2px solid var(--neon-cyan); padding: 14px;
+            font-size: 16px; font-weight: bold; border-radius: 12px; cursor: pointer; transition: all 0.3s ease;
+            text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-search { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); }
+        .btn-search:hover { background: var(--neon-cyan); color: black; box-shadow: 0 0 25px var(--neon-cyan); }
+        .btn-stars { border-color: var(--neon-pink); box-shadow: 0 0 15px rgba(255, 0, 127, 0.2); }
+        .btn-stars:hover { background: var(--neon-pink); box-shadow: 0 0 25px var(--neon-pink); }
+        .disabled { opacity: 0.5; pointer-events: none; }
+    </style>
+</head>
+<body>
 
-        if (data.type === 'make_move') {
-            const user = getUser(data.userId);
-            const game = activeGames[user.gameId];
-            if (!game) return;
+    <div class="header">
+        <div class="user-info">
+            <span class="username" id="username">Игрок</span>
+        </div>
+        <div class="balance-container">
+            <span class="star-icon">⭐</span>
+            <span id="balance">0</span>
+        </div>
+    </div>
 
-            const playerSymbol = game.players.X === user.userId ? 'X' : 'O';
-            if (game.turn !== playerSymbol || game.board[data.index] !== null) return;
+    <div class="main-container">
+        <div class="status-text" id="status">Подключение к серверу...</div>
 
-            // Делаем ход
-            game.board[data.index] = playerSymbol;
-            game.turn = game.turn === 'X' ? 'O' : 'X';
+        <div class="board disabled" id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
 
-            const p1 = getUser(game.players.X);
-            const p2 = getUser(game.players.O);
+        <div class="actions">
+            <button class="btn btn-search disabled" id="searchBtn">Искать PvP (Ставка: 5 ⭐)</button>
+            <button class="btn btn-stars" id="buyBtn">Пополнить Звезды</button>
+        </div>
+    </div>
 
-            const msgUpdate = JSON.stringify({ type: 'update', index: data.index, symbol: playerSymbol, nextTurn: game.turn });
-            if (p1.ws) p1.ws.send(msgUpdate);
-            if (p2.ws) p2.ws.send(msgUpdate);
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
 
-            // Проверяем окончание игры
-            const winner = checkWinner(game.board);
-            if (winner) {
-                if (winner === 'draw') {
-                    // При ничьей возвращаем ставки (по 5 звезд)
-                    p1.balance += 5;
-                    p2.balance += 5;
-                } else {
-                    // Победитель забирает банк (10 звезд за вычетом комиссии 1 звезда серверу)
-                    const winnerId = game.players[winner];
-                    getUser(winnerId).balance += 9; 
+        const userId = tg.initDataUnsafe?.user?.id || Math.floor(Math.random() * 100000);
+        const name = tg.initDataUnsafe?.user?.first_name || "Аноним";
+        document.getElementById('username').innerText = name;
+
+        let ws;
+        let mySymbol = null;
+        let isMyTurn = false;
+
+        // Автоматически подключаемся по правильному адресу Render
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = wsProtocol + '//' + window.location.host;
+
+        function connectWS() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                document.getElementById('status').innerText = "Успешно подключено! Ищите PvP";
+                document.getElementById('searchBtn').classList.remove('disabled');
+                ws.send(JSON.stringify({ type: 'auth', userId, name }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                switch(data.type) {
+                    case 'userData':
+                        document.getElementById('balance').innerText = data.balance;
+                        break;
+                    case 'waiting':
+                        document.getElementById('status').innerText = "Поиск оппонента в сети...";
+                        document.getElementById('searchBtn').classList.add('disabled');
+                        break;
+                    case 'gameStart':
+                        mySymbol = data.symbol;
+                        isMyTurn = (mySymbol === 'X');
+                        document.getElementById('board').classList.remove('disabled');
+                        document.getElementById('searchBtn').classList.add('disabled');
+                        resetBoardVisuals();
+                        updateStatusText();
+                        break;
+                    case 'update':
+                        document.querySelectorAll('.cell')[data.index].innerText = data.symbol;
+                        document.querySelectorAll('.cell')[data.index].classList.add(data.symbol.toLowerCase());
+                        isMyTurn = (data.nextTurn === mySymbol);
+                        updateStatusText();
+                        break;
+                    case 'gameOver':
+                        document.getElementById('board').classList.add('disabled');
+                        document.getElementById('searchBtn').classList.remove('disabled');
+                        document.getElementById('status').innerText = data.winner === 'draw' ? "Ничья! Ставки возвращены." : (data.winner === mySymbol ? "🎉 Вы победили!" : "😢 Вы проиграли.");
+                        ws.send(JSON.stringify({ type: 'get_balance', userId }));
+                        break;
+                    case 'opponentLeft':
+                        document.getElementById('board').classList.add('disabled');
+                        document.getElementById('searchBtn').classList.remove('disabled');
+                        document.getElementById('status').innerText = "Соперник сбежал. Победили вы!";
+                        ws.send(JSON.stringify({ type: 'get_balance', userId }));
+                        break;
+                    case 'error':
+                        tg.showAlert(data.message);
+                        document.getElementById('searchBtn').classList.remove('disabled');
+                        break;
                 }
-
-                const msgOver = JSON.stringify({ type: 'gameOver', winner });
-                if (p1.ws) p1.ws.send(msgOver);
-                if (p2.ws) p2.ws.send(msgOver);
-
-                delete activeGames[user.gameId];
-            }
-        }
-    });
-
-    ws.on('close', () => {
-        if (matchmakingQueue === currentUserId) matchmakingQueue = null;
-        const user = getUser(currentUserId);
-        if (user && user.gameId && activeGames[user.gameId]) {
-            const game = activeGames[user.gameId];
-            const opponentId = game.players.X === currentUserId ? game.players.O : game.players.X;
-            const opponent = getUser(opponentId);
-            
-            // Если игрок ливнул во время матча, оппонент побеждает и забирает банк
-            opponent.balance += 9;
-            if (opponent.ws) opponent.ws.send(JSON.stringify({ type: 'opponentLeft' }));
-            
-            delete activeGames[user.gameId];
-        }
-    });
-});
-
-server.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
